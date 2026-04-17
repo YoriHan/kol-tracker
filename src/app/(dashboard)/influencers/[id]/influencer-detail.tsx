@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,7 +19,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import {
   ArrowLeft, ExternalLink, AlertCircle, Plus,
-  FileText, DollarSign, BarChart2, MessageSquare, Clock,
+  FileText, DollarSign, BarChart2, MessageSquare, Clock, Link2, Copy, Check,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -51,6 +52,49 @@ export function InfluencerDetail({
   const [inf, setInf] = useState(initial)
   const [logs, setLogs] = useState(initialLogs)
   const [saving, setSaving] = useState(false)
+
+  // Attribution stats
+  const [attrStats, setAttrStats] = useState<{ clicks: number; conversions: number } | null>(null)
+  const [attrLoading, setAttrLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const loadAttrStats = useCallback(async () => {
+    if (!inf.kol_slug) return
+    setAttrLoading(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any
+    const [{ count: clicks }, { count: conversions }] = await Promise.all([
+      sb.from('click_events').select('id', { count: 'exact', head: true }).eq('kol_slug', inf.kol_slug),
+      sb.from('conversion_events').select('id', { count: 'exact', head: true }).eq('kol_slug', inf.kol_slug),
+    ])
+    setAttrStats({ clicks: clicks ?? 0, conversions: conversions ?? 0 })
+    setAttrLoading(false)
+  }, [inf.kol_slug, supabase])
+
+  useEffect(() => { loadAttrStats() }, [loadAttrStats])
+
+  function generateSlug() {
+    const base = inf.twitter_handle.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const suffix = Math.random().toString(36).slice(2, 6)
+    return `${base}-${suffix}`
+  }
+
+  async function handleGenerateSlug() {
+    const slug = generateSlug()
+    await updateField('kol_slug', slug)
+    setAttrStats({ clicks: 0, conversions: 0 })
+  }
+
+  function getTrackingLink() {
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    return `${base}/api/track/${inf.kol_slug}`
+  }
+
+  async function copyTrackingLink() {
+    await navigator.clipboard.writeText(getTrackingLink())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   // Communication log form
   const [logMethod, setLogMethod] = useState<ContactMethod>('DM')
@@ -186,6 +230,7 @@ export function InfluencerDetail({
             <TabsTrigger value="performance"><BarChart2 className="h-3.5 w-3.5 mr-1.5" />效果</TabsTrigger>
             <TabsTrigger value="logs"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />沟通记录</TabsTrigger>
             <TabsTrigger value="activity"><Clock className="h-3.5 w-3.5 mr-1.5" />操作日志</TabsTrigger>
+            <TabsTrigger value="attribution"><Link2 className="h-3.5 w-3.5 mr-1.5" />归因追踪</TabsTrigger>
           </TabsList>
 
           {/* Basic & Deal tab */}
@@ -419,6 +464,102 @@ export function InfluencerDetail({
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Attribution tracking tab */}
+          <TabsContent value="attribution" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">追踪链接</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!inf.kol_slug ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="text-sm text-gray-500">还没有生成追踪链接，点击生成一个专属 slug。</p>
+                    <Button size="sm" onClick={handleGenerateSlug}>生成追踪链接</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">Slug</label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                          {inf.kol_slug}
+                        </code>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">追踪链接（分享给受众）</label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          readOnly
+                          value={getTrackingLink()}
+                          className="text-xs font-mono"
+                        />
+                        <Button size="sm" variant="outline" onClick={copyTrackingLink}>
+                          {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">目标 URL（跳转目的地）</label>
+                      <EditableUrl
+                        value={inf.tracking_url}
+                        onSave={(v) => updateField('tracking_url', v)}
+                        placeholder="https://yoursite.com/register（空则用环境变量默认值）"
+                      />
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {inf.kol_slug && (
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-gray-500 mb-1">点击数</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {attrLoading ? '…' : (attrStats?.clicks ?? 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-gray-500 mb-1">转化数</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {attrLoading ? '…' : (attrStats?.conversions ?? 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-gray-500 mb-1">转化率</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {attrLoading || !attrStats ? '…' : attrStats.clicks === 0 ? '—' : `${((attrStats.conversions / attrStats.clicks) * 100).toFixed(1)}%`}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {inf.kol_slug && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">嵌入代码（放在落地页 &lt;head&gt; 里）</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all">
+{`<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/api/embed.js"></script>`}
+                  </pre>
+                  <p className="text-xs text-gray-500">
+                    用户注册时调用 <code className="bg-gray-100 px-1 rounded">window.kolTrack(&apos;register&apos;)</code> 上报转化。
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Activity log tab */}
