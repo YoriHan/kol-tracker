@@ -89,6 +89,9 @@ export interface Influencer {
   draft2_done: boolean
   publish_date: string | null
   post_url: string | null
+  // Attribution tracking
+  kol_slug: string | null
+  tracking_url: string | null
   impressions: number | null
   engagement_rate: number | null
   clicks: number | null
@@ -114,6 +117,25 @@ export interface CommunicationLog {
   twitter_dm_id: string | null
   created_at: string
   profile?: Profile | null
+}
+
+export interface ClickEvent {
+  id: string
+  kol_slug: string
+  influencer_id: string | null
+  ip_hash: string | null
+  user_agent: string | null
+  referrer: string | null
+  created_at: string
+}
+
+export interface ConversionEvent {
+  id: string
+  kol_slug: string
+  influencer_id: string | null
+  event_type: string
+  session_id: string | null
+  created_at: string
 }
 
 export interface ActivityLog {
