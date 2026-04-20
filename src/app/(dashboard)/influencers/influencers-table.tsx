@@ -97,12 +97,12 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
           <span className="text-sm text-blue-700 font-medium">已选 {selected.size} 个</span>
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-blue-500" />
-            <Select onValueChange={batchAssign} disabled={batchAssigning}>
+            <Select onValueChange={(v) => batchAssign(v === '__clear__' ? '' : v)} disabled={batchAssigning}>
               <SelectTrigger className="h-7 w-36 text-xs border-blue-300">
                 <SelectValue placeholder="批量分配负责人" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">清除负责人</SelectItem>
+                <SelectItem value="__clear__">清除负责人</SelectItem>
                 {profiles.map((p) => (
                   <SelectItem key={p.id} value={p.id} className="text-xs">
                     {p.display_name ?? p.email}
