@@ -13,20 +13,38 @@ export default async function InfluencerDetailPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const [infRes, commRes, actRes, profRes] = await Promise.all([
-    supabase
-      .from('influencers')
-      .select('*, assigned_profile:profiles!influencers_assigned_to_fkey(id, display_name, email, avatar_url)')
-      .eq('id', id)
-      .single(),
+  // Fetch influencer without FK join hint to avoid PostgREST ambiguity
+  const infRes = await supabase
+    .from('influencers')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (infRes.error || !infRes.data) {
+    console.error('[detail] influencer fetch error:', infRes.error)
+    notFound()
+  }
+
+  // Fetch assigned profile separately if set
+  let assignedProfile: Pick<Profile, 'id' | 'display_name' | 'email' | 'avatar_url'> | null = null
+  if (infRes.data.assigned_to) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, email, avatar_url')
+      .eq('id', infRes.data.assigned_to)
+      .single()
+    assignedProfile = data ?? null
+  }
+
+  const [commRes, actRes, profRes] = await Promise.all([
     supabase
       .from('communication_logs')
-      .select('*, profile:profiles(id, display_name, email, avatar_url)')
+      .select('*')
       .eq('influencer_id', id)
       .order('contacted_at', { ascending: false }),
     supabase
       .from('activity_logs')
-      .select('*, profile:profiles(id, display_name, email, avatar_url)')
+      .select('*')
       .eq('influencer_id', id)
       .order('created_at', { ascending: false })
       .limit(50),
@@ -35,11 +53,14 @@ export default async function InfluencerDetailPage({
       .select('id, display_name, email, avatar_url'),
   ])
 
-  if (infRes.error || !infRes.data) notFound()
+  const influencer = {
+    ...infRes.data,
+    assigned_profile: assignedProfile,
+  } as unknown as Influencer
 
   return (
     <InfluencerDetail
-      influencer={infRes.data as unknown as Influencer}
+      influencer={influencer}
       communicationLogs={(commRes.data ?? []) as unknown as CommunicationLog[]}
       activityLogs={(actRes.data ?? []) as unknown as ActivityLog[]}
       profiles={(profRes.data ?? []) as Pick<Profile, 'id' | 'display_name' | 'email' | 'avatar_url'>[]}
