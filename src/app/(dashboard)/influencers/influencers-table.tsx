@@ -166,7 +166,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 }}
               >
                 {/* Checkbox */}
-                <td className="px-3 py-3">
+                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(inf.id)}
@@ -249,7 +249,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 </td>
 
                 {/* Actions */}
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7">
