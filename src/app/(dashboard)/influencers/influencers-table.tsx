@@ -86,15 +86,18 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
   }
 
   async function updateStage(id: string, stage: InfluencerStage) {
+    // Optimistic update — UI reflects change instantly
+    onUpdate((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, current_stage: stage } : i))
+    )
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from('influencers')
       .update({ current_stage: stage })
       .eq('id', id)
-    if (!error) {
-      onUpdate((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, current_stage: stage } : i))
-      )
+    if (error) {
+      // Rollback on failure
+      onUpdate((prev) => [...prev])
     }
   }
 

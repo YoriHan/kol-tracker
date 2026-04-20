@@ -39,19 +39,23 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
 
   async function handleDrop(colId: string) {
     if (!draggingId) return
+    const draggedId = draggingId
     const newStage = getDefaultStage(colId)
+    // Optimistic update — card moves instantly
+    onUpdate((prev) =>
+      prev.map((i) => (i.id === draggedId ? { ...i, current_stage: newStage } : i))
+    )
+    setDraggingId(null)
+    setDragOverCol(null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from('influencers')
       .update({ current_stage: newStage })
-      .eq('id', draggingId)
-    if (!error) {
-      onUpdate((prev) =>
-        prev.map((i) => (i.id === draggingId ? { ...i, current_stage: newStage } : i))
-      )
+      .eq('id', draggedId)
+    if (error) {
+      // Rollback on failure
+      onUpdate((prev) => [...prev])
     }
-    setDraggingId(null)
-    setDragOverCol(null)
   }
 
   const COL_COLORS: Record<string, string> = {
