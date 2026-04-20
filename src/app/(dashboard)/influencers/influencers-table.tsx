@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ function formatFollowers(n: number | null): string {
 
 export function InfluencersTable({ influencers, profiles, onUpdate }: InfluencersTableProps) {
   const supabase = createClient()
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchAssigning, setBatchAssigning] = useState(false)
 
@@ -153,9 +155,9 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
           {influencers.map((inf) => {
             const overdue = isFollowupOverdue(inf.next_followup_date)
             return (
-              <tr key={inf.id} className={`hover:bg-gray-50 transition-colors ${selected.has(inf.id) ? 'bg-blue-50' : ''}`}>
+              <tr key={inf.id} onClick={() => router.push(`/influencers/${inf.id}`)} className={`cursor-pointer hover:bg-gray-50 transition-colors ${selected.has(inf.id) ? 'bg-blue-50' : ''}`}>
                 {/* Checkbox */}
-                <td className="px-3 py-3">
+                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(inf.id)}
@@ -238,7 +240,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 </td>
 
                 {/* Actions */}
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7">
