@@ -22,6 +22,7 @@ import {
   FileText, DollarSign, BarChart2, MessageSquare, Clock, Link2, Copy, Check,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { AttributionChart } from '@/components/attribution-chart'
 
 interface InfluencerDetailProps {
   influencer: Influencer
@@ -56,6 +57,7 @@ export function InfluencerDetail({
 
   // Attribution stats
   const [attrStats, setAttrStats] = useState<{ clicks: number; conversions: number } | null>(null)
+  const [clickEvents, setClickEvents] = useState<{ created_at: string }[]>([])
   const [attrLoading, setAttrLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -64,11 +66,13 @@ export function InfluencerDetail({
     setAttrLoading(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any
-    const [{ count: clicks }, { count: conversions }] = await Promise.all([
+    const [{ count: clicks }, { count: conversions }, { data: eventsData }] = await Promise.all([
       sb.from('click_events').select('id', { count: 'exact', head: true }).eq('kol_slug', inf.kol_slug),
       sb.from('conversion_events').select('id', { count: 'exact', head: true }).eq('kol_slug', inf.kol_slug),
+      sb.from('click_events').select('created_at').eq('kol_slug', inf.kol_slug).gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
     ])
     setAttrStats({ clicks: clicks ?? 0, conversions: conversions ?? 0 })
+    setClickEvents(eventsData ?? [])
     setAttrLoading(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inf.kol_slug])
@@ -545,6 +549,22 @@ export function InfluencerDetail({
                   </CardContent>
                 </Card>
               </div>
+            )}
+
+
+            {inf.kol_slug && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">近 30 天点击趋势</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {attrLoading ? (
+                    <p className="text-sm text-gray-400 py-4 text-center">加载中…</p>
+                  ) : (
+                    <AttributionChart clickEvents={clickEvents} />
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {inf.kol_slug && (
