@@ -35,7 +35,7 @@ export default async function DashboardPage() {
   ).length
   const newThisWeek = all.filter((i) => i.created_at >= weekStart).length
   const pendingFollowup = all.filter(
-    (i) => i.next_followup_date != null && i.next_followup_date <= today && i.current_stage !== '完成'
+    (i) => i.next_followup_date != null && i.next_followup_date <= today && i.current_stage !== '完成' && i.current_stage !== '已付款'
   ).length
   const pendingPayment = all
     .filter((i) => i.payment_status === '已开票')

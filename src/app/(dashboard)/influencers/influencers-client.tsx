@@ -88,7 +88,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   function handleExport() {
     const headers = [
       'twitter_handle','display_name','followers_count','category',
-      'current_stage','next_followup_date','contract_value','payment_status',
+      'current_stage','last_contact_date','next_followup_date','quote_per_post','contract_value','payment_status',
     ]
     const rows = filtered.map((i) => {
       const rec = i as unknown as Record<string, unknown>
