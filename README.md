@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KOL Tracker — 红人合作全链路管理工具
 
-## Getting Started
+> 从第一次发 DM，到付款完成，把每一个 KOL 合作的全流程都放在一个地方管。
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 这个工具是做什么的
+
+你在跟 10 个、50 个、100 个 Twitter/X 红人谈合作。每个人都在不同阶段——有的刚发完 DM，有的在谈价格，有的稿子还没审完，有的发票还没付。
+
+KOL Tracker 帮你把这些全部理清楚：
+
+- **谁在哪个阶段？** — 一眼看到每个红人的当前状态
+- **谁需要跟进？** — 超期未联系的自动标红提醒
+- **钱的情况怎么样？** — 合同金额、开票状态、待付款汇总
+- **效果怎么样？** — 每个红人专属追踪链接，实时看点击 / 转化数据
+
+---
+
+## 功能关系图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          KOL Tracker                            │
+├─────────────────┬──────────────────────┬────────────────────────┤
+│   首页仪表盘     │     红人库（列表）    │      红人详情页         │
+│                 │                      │                        │
+│  · 红人总数     │  · 搜索 / 筛选       │  ┌─ 基础 & 合作信息    │
+│  · 本周新增     │  · 阶段 / 分类筛选   │  ├─ 财务（合同/发票）  │
+│  · 待跟进 🔴    │  · 逾期跟进 toggle   │  ├─ 效果数据           │
+│  · 本月完成     │  · 表格 ↔ 看板切换  │  ├─ 沟通记录           │
+│  · 待付款金额   │  · 批量改阶段        │  ├─ 操作日志           │
+│                 │  · 批量分配负责人    │  └─ 归因追踪           │
+│                 │  · 导入 / 导出 CSV   │                        │
+└─────────────────┴──────────────────────┴────────────────────────┘
+                            │
+               ┌────────────┴─────────────┐
+               │                          │
+      ┌────────▼─────────┐    ┌───────────▼──────────┐
+      │     看板视图      │    │      归因追踪系统      │
+      │                  │    │                       │
+      │  接触中           │    │  生成专属追踪链接      │
+      │    ↓ 商务期       │    │       ↓               │
+      │    ↓ 制作中       │    │  用户点击 → 记录      │
+      │    ↓ 发布收尾     │    │       ↓               │
+      │    ↓ 财务         │    │  转化上报 → 统计      │
+      │  （拖拽改阶段）   │    │  30天点击趋势图        │
+      └──────────────────┘    └───────────────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 核心工作流
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+发现红人
+   │
+   ▼
+添加到红人库（填入 Twitter 账号，自动拉取头像 / 简介 / 粉丝数）
+   │
+   ▼
+推进合作阶段：待接触 → 已发DM → 谈判中 → 已签约
+   │                                         │
+   │                               生成专属追踪链接
+   │                               发给受众，追踪点击 / 转化
+   ▼
+合作中：提交 Draft1 → Draft2 → 待发布 → 已发送
+   │
+   ▼
+财务收尾：已发Invoice → 已付款 → 完成
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 功能一览
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| 模块 | 功能 |
+|------|------|
+| **首页仪表盘** | 总数、本周新增、待跟进（超期红色高亮）、本月完成、待付款金额 |
+| **红人库** | 搜索、按阶段 / 分类 / 逾期跟进筛选，表格和看板两种视图 |
+| **批量操作** | 多选后批量改阶段、批量分配负责人 |
+| **数据导入导出** | CSV 批量导入红人、导出当前筛选结果（含 BOM，Excel 直接打开不乱码） |
+| **详情页** | 6 个 tab：基础 & 合作、财务、效果数据、沟通记录、操作日志、归因追踪 |
+| **看板视图** | 各阶段作为列，拖拽卡片直接改阶段 |
+| **归因追踪** | 每个红人生成专属链接，记录点击 / 转化，查看 30 天趋势折线图 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 本地运行
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**前置条件**：Node.js 18+，一个 Supabase 项目
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# 1. 克隆
+git clone https://github.com/YoriHan/kol-tracker.git
+cd kol-tracker
+
+# 2. 安装依赖
+npm install
+
+# 3. 配置环境变量（复制示例文件后填入你的 Supabase 信息）
+# 新建 .env.local，填入：
+# NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# 4. 初始化数据库
+# 在 Supabase SQL 编辑器中执行 supabase/schema.sql
+
+# 5. 启动本地开发服务器
+npm run dev
+```
+
+打开 [http://localhost:3000](http://localhost:3000)，注册账号即可使用。
+
+---
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 前端框架 | Next.js 16 (App Router) · TypeScript |
+| UI | Tailwind CSS · shadcn/ui |
+| 数据库 / 认证 | Supabase (PostgreSQL + Auth + Row Level Security) |
+| 图表 | Recharts |
+| 部署 | Vercel |
+
+---
+
+## 线上地址
+
+[https://kol-tracker-woad.vercel.app](https://kol-tracker-woad.vercel.app)
