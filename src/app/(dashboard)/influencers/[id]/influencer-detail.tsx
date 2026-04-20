@@ -253,10 +253,10 @@ export function InfluencerDetail({
                     <EditableNumber value={inf.followers_count} onSave={(v) => updateField('followers_count', v)} />
                   </Field>
                   <Field label="负责人">
-                    <Select value={inf.assigned_to ?? ''} onValueChange={(v) => updateField('assigned_to', v || null)}>
+                    <Select value={inf.assigned_to ?? '__none__'} onValueChange={(v) => updateField('assigned_to', v === '__none__' ? null : v)}>
                       <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="未分配" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">未分配</SelectItem>
+                        <SelectItem value="__none__">未分配</SelectItem>
                         {profiles.map((p) => (
                           <SelectItem key={p.id} value={p.id}>{p.display_name ?? p.email}</SelectItem>
                         ))}
