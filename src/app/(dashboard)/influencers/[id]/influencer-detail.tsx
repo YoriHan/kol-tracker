@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -48,7 +48,8 @@ const CONTACT_METHODS: ContactMethod[] = ['DM','邮件','电话','其他']
 export function InfluencerDetail({
   influencer: initial, communicationLogs: initialLogs, activityLogs, profiles,
 }: InfluencerDetailProps) {
-  const supabase = createClient()
+  // Memoize supabase client so it doesn't trigger infinite re-renders
+  const supabase = useMemo(() => createClient(), [])
   const [inf, setInf] = useState(initial)
   const [logs, setLogs] = useState(initialLogs)
   const [saving, setSaving] = useState(false)
@@ -69,7 +70,8 @@ export function InfluencerDetail({
     ])
     setAttrStats({ clicks: clicks ?? 0, conversions: conversions ?? 0 })
     setAttrLoading(false)
-  }, [inf.kol_slug, supabase])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inf.kol_slug])
 
   useEffect(() => { loadAttrStats() }, [loadAttrStats])
 
