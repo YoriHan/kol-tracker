@@ -14,7 +14,7 @@ import { isFollowupOverdue } from '@/lib/staleness'
 import type { Influencer, Profile, InfluencerStage } from '@/types/database'
 import { formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MoreHorizontal, AlertCircle, Users } from 'lucide-react'
+import { MoreHorizontal, AlertCircle, Users, Tag } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 interface InfluencersTableProps {
@@ -35,6 +35,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchAssigning, setBatchAssigning] = useState(false)
+  const [batchStageing, setBatchStageing] = useState(false)
 
   const allIds = influencers.map((i) => i.id)
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id))
@@ -70,6 +71,20 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
     setBatchAssigning(false)
   }
 
+  async function batchChangeStage(stage: InfluencerStage) {
+    if (selected.size === 0) return
+    setBatchStageing(true)
+    const ids = Array.from(selected)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('influencers').update({ current_stage: stage }).in('id', ids)
+    if (!error) {
+      onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, current_stage: stage } : i))
+      setSelected(new Set())
+    }
+    setBatchStageing(false)
+  }
+
   async function updateStage(id: string, stage: InfluencerStage) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
@@ -95,6 +110,17 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
       {selected.size > 0 && (
         <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center gap-3">
           <span className="text-sm text-blue-700 font-medium">已选 {selected.size} 个</span>
+          <div className="flex items-center gap-1.5">
+            <Tag className="h-4 w-4 text-blue-500" />
+            <Select onValueChange={(v) => batchChangeStage(v as InfluencerStage)} disabled={batchStageing}>
+              <SelectTrigger className="h-7 w-36 text-xs border-blue-300">
+                <SelectValue placeholder="批量改阶段" />
+              </SelectTrigger>
+              <SelectContent>
+                {stages.map((s) => (<SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-blue-500" />
             <Select onValueChange={(v) => batchAssign(v === '__clear__' ? '' : v)} disabled={batchAssigning}>
