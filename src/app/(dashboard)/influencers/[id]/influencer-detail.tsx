@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -102,10 +102,56 @@ export function InfluencerDetail({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Communication log form
+  // Communication log form + @mention
   const [logMethod, setLogMethod] = useState<ContactMethod>('DM')
   const [logSummary, setLogSummary] = useState('')
   const [addingLog, setAddingLog] = useState(false)
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null) // null = no active mention
+  const [mentionStart, setMentionStart] = useState(0)
+  const logInputRef = useRef<HTMLInputElement>(null)
+
+  const mentionMatches = useMemo(() => {
+    if (mentionSearch === null) return []
+    const q = mentionSearch.toLowerCase()
+    return profiles.filter((p) => {
+      const name = (p.display_name ?? p.email ?? '').toLowerCase()
+      return name.includes(q)
+    }).slice(0, 6)
+  }, [mentionSearch, profiles])
+
+  function handleLogSummaryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    const cursor = e.target.selectionStart ?? val.length
+    setLogSummary(val)
+
+    // Detect @mention: find last @ before cursor with no space after it
+    const textBefore = val.slice(0, cursor)
+    const atIdx = textBefore.lastIndexOf('@')
+    if (atIdx !== -1) {
+      const afterAt = textBefore.slice(atIdx + 1)
+      if (!afterAt.includes(' ') && !afterAt.includes('@')) {
+        setMentionStart(atIdx)
+        setMentionSearch(afterAt)
+        return
+      }
+    }
+    setMentionSearch(null)
+  }
+
+  function insertMention(profile: Pick<typeof profiles[0], 'id' | 'display_name' | 'email'>) {
+    const name = profile.display_name ?? profile.email ?? ''
+    const before = logSummary.slice(0, mentionStart)
+    const after = logSummary.slice(mentionStart + 1 + (mentionSearch ?? '').length)
+    const newVal = `${before}@${name} ${after}`
+    setLogSummary(newVal)
+    setMentionSearch(null)
+    // Restore focus
+    setTimeout(() => {
+      logInputRef.current?.focus()
+      const pos = before.length + name.length + 2
+      logInputRef.current?.setSelectionRange(pos, pos)
+    }, 0)
+  }
 
   const overdue = isFollowupOverdue(inf.next_followup_date)
 
@@ -168,6 +214,17 @@ export function InfluencerDetail({
       await updateField('last_contact_date', new Date().toISOString())
     }
     setAddingLog(false)
+  }
+
+  function renderWithMentions(text: string) {
+    const parts = text.split(/(@\S+)/g)
+    return parts.map((part, i) =>
+      part.startsWith('@') ? (
+        <span key={i} className="text-blue-600 font-medium">{part}</span>
+      ) : (
+        part
+      )
+    )
   }
 
   function formatFollowers(n: number | null) {
@@ -435,13 +492,34 @@ export function InfluencerDetail({
                       {CONTACT_METHODS.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <div className="relative flex-1">
                   <input
-                    className="flex-1 text-sm border border-gray-200 rounded px-2 py-1"
-                    placeholder="这次沟通的内容摘要…"
+                    ref={logInputRef}
+                    className="w-full text-sm border border-gray-200 rounded px-2 py-1"
+                    placeholder="这次沟通的内容摘要… 输入 @ 提及成员"
                     value={logSummary}
-                    onChange={(e) => setLogSummary(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addCommunicationLog()}
+                    onChange={handleLogSummaryChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { setMentionSearch(null); return }
+                      if (e.key === 'Enter' && mentionSearch === null) addCommunicationLog()
+                    }}
                   />
+                  {/* @mention dropdown */}
+                  {mentionSearch !== null && mentionMatches.length > 0 && (
+                    <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-md shadow-lg py-1 w-52">
+                      {mentionMatches.map((p) => (
+                        <button
+                          key={p.id}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          onMouseDown={(e) => { e.preventDefault(); insertMention(p) }}
+                        >
+                          <span className="font-medium text-gray-800 truncate">{p.display_name ?? p.email}</span>
+                          {p.display_name && <span className="text-xs text-gray-400 truncate">{p.email}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  </div>
                   <Button size="sm" onClick={addCommunicationLog} disabled={addingLog || !logSummary.trim()}>
                     <Plus className="h-4 w-4" />
                   </Button>
@@ -458,7 +536,7 @@ export function InfluencerDetail({
                         <Badge variant="outline" className="text-xs">{log.method}</Badge>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-gray-800">{log.summary}</p>
+                        <p className="text-gray-800">{renderWithMentions(log.summary)}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {formatDistanceToNow(new Date(log.contacted_at), { addSuffix: true, locale: zhCN })}
                           {log.profile && ` · ${log.profile.display_name ?? log.profile.email}`}
