@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ function formatFollowers(n: number | null): string {
 
 export function InfluencersTable({ influencers, profiles, onUpdate }: InfluencersTableProps) {
   const supabase = createClient()
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchAssigning, setBatchAssigning] = useState(false)
 
@@ -153,7 +155,16 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
           {influencers.map((inf) => {
             const overdue = isFollowupOverdue(inf.next_followup_date)
             return (
-              <tr key={inf.id} className={`hover:bg-gray-50 transition-colors ${selected.has(inf.id) ? 'bg-blue-50' : ''}`}>
+              <tr
+                key={inf.id}
+                className={`hover:bg-gray-50 transition-colors cursor-pointer ${selected.has(inf.id) ? 'bg-blue-50' : ''}`}
+                onClick={(e) => {
+                  // Don't navigate if clicking checkbox or interactive elements
+                  const target = e.target as HTMLElement
+                  if (target.closest('input,button,[role="combobox"],[role="menu"],[role="menuitem"]')) return
+                  router.push(`/influencers/${inf.id}`)
+                }}
+              >
                 {/* Checkbox */}
                 <td className="px-3 py-3">
                   <input
