@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { RichTextEditor } from '@/components/rich-text-editor'
 import { StageBadge } from '@/components/influencers/stage-badge'
 import { StalenessBadge } from '@/components/influencers/staleness-badge'
 import { isFollowupOverdue } from '@/lib/staleness'
@@ -175,6 +176,11 @@ export function InfluencerDetail({
     await (supabase as any).from('influencers').update({ tags: next }).eq('id', inf.id)
   }
 
+  function stripHtml(html: string | null): string {
+    if (!html) return '—'
+    return html.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim() || '—'
+  }
+
   async function handleExportPDF() {
     const { jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
@@ -200,7 +206,7 @@ export function InfluencerDetail({
         ['下次跟进', inf.next_followup_date ?? '—'],
         ['最后联系', inf.last_contact_date ?? '—'],
         ['标签', tags.join(', ') || '—'],
-        ['备注', inf.notes ?? '—'],
+        ['备注', stripHtml(inf.notes)],
       ],
       headStyles: { fillColor: [59, 130, 246] },
       styles: { fontSize: 10 },
@@ -412,20 +418,20 @@ export function InfluencerDetail({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-3 md:p-6">
         <Tabs defaultValue="info">
-          <TabsList className="mb-4">
-            <TabsTrigger value="info"><FileText className="h-3.5 w-3.5 mr-1.5" />基础 & 合作</TabsTrigger>
-            <TabsTrigger value="finance"><DollarSign className="h-3.5 w-3.5 mr-1.5" />财务</TabsTrigger>
-            <TabsTrigger value="performance"><BarChart2 className="h-3.5 w-3.5 mr-1.5" />效果</TabsTrigger>
-            <TabsTrigger value="logs"><MessageSquare className="h-3.5 w-3.5 mr-1.5" />沟通记录</TabsTrigger>
-            <TabsTrigger value="activity"><Clock className="h-3.5 w-3.5 mr-1.5" />操作日志</TabsTrigger>
-            <TabsTrigger value="attribution"><Link2 className="h-3.5 w-3.5 mr-1.5" />归因追踪</TabsTrigger>
+          <TabsList className="mb-4 overflow-x-auto flex w-full sm:w-auto h-auto flex-nowrap">
+            <TabsTrigger value="info" className="shrink-0 text-xs sm:text-sm"><FileText className="h-3.5 w-3.5 mr-1" /><span className="hidden xs:inline">基础 & 合作</span><span className="xs:hidden">基础</span></TabsTrigger>
+            <TabsTrigger value="finance" className="shrink-0 text-xs sm:text-sm"><DollarSign className="h-3.5 w-3.5 mr-1" />财务</TabsTrigger>
+            <TabsTrigger value="performance" className="shrink-0 text-xs sm:text-sm"><BarChart2 className="h-3.5 w-3.5 mr-1" />效果</TabsTrigger>
+            <TabsTrigger value="logs" className="shrink-0 text-xs sm:text-sm"><MessageSquare className="h-3.5 w-3.5 mr-1" />沟通</TabsTrigger>
+            <TabsTrigger value="activity" className="shrink-0 text-xs sm:text-sm"><Clock className="h-3.5 w-3.5 mr-1" />日志</TabsTrigger>
+            <TabsTrigger value="attribution" className="shrink-0 text-xs sm:text-sm"><Link2 className="h-3.5 w-3.5 mr-1" />归因</TabsTrigger>
           </TabsList>
 
           {/* Basic & Deal tab */}
           <TabsContent value="info" className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-sm">基础信息</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
@@ -487,11 +493,10 @@ export function InfluencerDetail({
                     </div>
                   </Field>
                   <Field label="备注">
-                    <textarea
-                      className="w-full text-sm border border-gray-200 rounded px-2 py-1 resize-none"
+                    <RichTextEditor
+                      value={inf.notes}
+                      onChange={(html) => updateField('notes', html)}
                       rows={3}
-                      value={inf.notes ?? ''}
-                      onChange={(e) => updateField('notes', e.target.value || null)}
                     />
                   </Field>
                 </CardContent>
@@ -525,7 +530,7 @@ export function InfluencerDetail({
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm">内容进度</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <input
@@ -553,7 +558,7 @@ export function InfluencerDetail({
                     <EditableUrl value={inf.draft2_url} onSave={(v) => updateField('draft2_url', v)} placeholder="Draft 2 链接" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="预定发布日">
                     <input
                       type="date"
@@ -574,7 +579,7 @@ export function InfluencerDetail({
           <TabsContent value="finance">
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm">财务信息</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="付款状态">
                   <Select value={inf.payment_status} onValueChange={(v) => updateField('payment_status', v as never)}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>

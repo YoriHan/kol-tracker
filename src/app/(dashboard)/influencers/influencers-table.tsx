@@ -155,13 +155,13 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
               />
             </th>
             <th className="px-4 py-3 font-medium w-48">红人</th>
-            <th className="px-4 py-3 font-medium">粉丝数</th>
-            <th className="px-4 py-3 font-medium">类别</th>
+            <th className="px-4 py-3 font-medium hidden sm:table-cell">粉丝数</th>
+            <th className="px-4 py-3 font-medium hidden md:table-cell">类别</th>
             <th className="px-4 py-3 font-medium">阶段</th>
-            <th className="px-4 py-3 font-medium">停留时间</th>
-            <th className="px-4 py-3 font-medium">负责人</th>
-            <th className="px-4 py-3 font-medium">最近联系</th>
-            <th className="px-4 py-3 font-medium">跟进</th>
+            <th className="px-4 py-3 font-medium hidden lg:table-cell">停留时间</th>
+            <th className="px-4 py-3 font-medium hidden md:table-cell">负责人</th>
+            <th className="px-4 py-3 font-medium hidden lg:table-cell">最近联系</th>
+            <th className="px-4 py-3 font-medium hidden sm:table-cell">跟进</th>
             <th className="px-4 py-3 font-medium w-10"></th>
           </tr>
         </thead>
@@ -217,12 +217,12 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 </td>
 
                 {/* Followers */}
-                <td className="px-4 py-3 text-gray-600">
+                <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">
                   {formatFollowers(inf.followers_count)}
                 </td>
 
                 {/* Category */}
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden md:table-cell">
                   {inf.category ? (
                     <Badge variant="secondary" className="text-xs">{inf.category}</Badge>
                   ) : (
@@ -236,19 +236,19 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 </td>
 
                 {/* Staleness */}
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden lg:table-cell">
                   <StalenessBadge stageEnteredAt={inf.stage_entered_at} />
                 </td>
 
                 {/* Assigned */}
-                <td className="px-4 py-3 text-gray-600 text-xs">
+                <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell">
                   {inf.assigned_profile
                     ? inf.assigned_profile.display_name ?? inf.assigned_profile.email
                     : <span className="text-gray-300">未分配</span>}
                 </td>
 
                 {/* Last contact */}
-                <td className="px-4 py-3 text-gray-500 text-xs">
+                <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell">
                   {inf.last_contact_date
                     ? formatDistanceToNow(new Date(inf.last_contact_date), {
                         addSuffix: true,
@@ -258,7 +258,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 </td>
 
                 {/* Followup */}
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 hidden sm:table-cell">
                   {inf.next_followup_date ? (
                     <span className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-600' : 'text-gray-500'}`}>
                       {overdue && <AlertCircle className="h-3.5 w-3.5" />}

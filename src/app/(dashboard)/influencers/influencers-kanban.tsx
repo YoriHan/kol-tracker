@@ -126,18 +126,53 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
                       </div>
                     </Link>
 
-                    <div className="mt-2 flex items-center justify-between gap-1">
-                      <StalenessBadge stageEnteredAt={inf.stage_entered_at} className="text-xs" />
+                    {/* Category + Followers */}
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                      {inf.category && (
+                        <span className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 truncate max-w-[80px]">
+                          {inf.category}
+                        </span>
+                      )}
                       {inf.followers_count && (
-                        <span className="text-xs text-gray-400">{formatFollowers(inf.followers_count)}</span>
+                        <span className="text-xs text-gray-400 ml-auto">{formatFollowers(inf.followers_count)}</span>
                       )}
                     </div>
 
-                    {/* Sub-stage tooltip */}
-                    <div className="mt-1.5 text-xs text-gray-400 truncate">{inf.current_stage}</div>
+                    <div className="mt-1.5 flex items-center justify-between gap-1">
+                      <StalenessBadge stageEnteredAt={inf.stage_entered_at} className="text-xs" />
+                    </div>
 
-                    {/* Overdue indicator */}
-                    {overdue && (
+                    {/* Assigned person */}
+                    {(() => {
+                      const assignee = inf.assigned_to ? profiles.find(p => p.id === inf.assigned_to) : null
+                      return assignee ? (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <Avatar className="h-4 w-4">
+                            <AvatarImage src={assignee.avatar_url ?? undefined} />
+                            <AvatarFallback className="text-[9px]">
+                              {(assignee.display_name ?? assignee.email).slice(0, 1).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs text-gray-500 truncate">
+                            {assignee.display_name ?? assignee.email}
+                          </span>
+                        </div>
+                      ) : null
+                    })()}
+
+                    {/* Sub-stage */}
+                    <div className="mt-1 text-xs text-gray-400 truncate">{inf.current_stage}</div>
+
+                    {/* Next followup date */}
+                    {inf.next_followup_date && (
+                      <div className={`mt-1 flex items-center gap-1 text-xs ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+                        {overdue && <AlertCircle className="h-3 w-3 shrink-0" />}
+                        跟进 {inf.next_followup_date}
+                      </div>
+                    )}
+
+                    {/* Overdue indicator (no date set but still overdue) */}
+                    {overdue && !inf.next_followup_date && (
                       <div className="mt-1.5 flex items-center gap-1 text-xs text-red-500">
                         <AlertCircle className="h-3 w-3" />
                         跟进已逾期

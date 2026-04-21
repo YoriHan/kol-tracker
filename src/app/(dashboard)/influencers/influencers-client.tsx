@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Upload, Download, LayoutGrid, List, X, AlertCircle, Tag } from 'lucide-react'
+import { Search, Plus, Upload, Download, LayoutGrid, List, X, AlertCircle, Tag, SlidersHorizontal } from 'lucide-react'
 import type { Influencer, InfluencerStage, Profile } from '@/types/database'
 import { InfluencersTable } from './influencers-table'
 import { InfluencersKanban } from './influencers-kanban'
@@ -32,6 +32,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   const [showImport, setShowImport] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [influencers, setInfluencers] = useState(initialInfluencers)
+  const [showFilters, setShowFilters] = useState(false)
 
   // All filters in local state — fast, no server round-trip
   const [search, setSearch] = useState(() => readParam('q'))
@@ -39,6 +40,8 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   const [categoryFilter, setCategoryFilter] = useState(() => readParam('category'))
   const [tagFilter, setTagFilter] = useState(() => readParam('tag'))
   const [overdueOnly, setOverdueOnly] = useState(() => readParam('overdue') === '1')
+  const [minFollowers, setMinFollowers] = useState(() => readParam('minf'))
+  const [maxFollowers, setMaxFollowers] = useState(() => readParam('maxf'))
 
   // Sync filters to URL without triggering Next.js navigation
   useEffect(() => {
@@ -48,10 +51,12 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     if (categoryFilter) params.set('category', categoryFilter)
     if (tagFilter) params.set('tag', tagFilter)
     if (overdueOnly) params.set('overdue', '1')
+    if (minFollowers) params.set('minf', minFollowers)
+    if (maxFollowers) params.set('maxf', maxFollowers)
     const qs = params.toString()
     const url = window.location.pathname + (qs ? '?' + qs : '')
     window.history.replaceState(null, '', url)
-  }, [search, stageFilter, categoryFilter, tagFilter, overdueOnly])
+  }, [search, stageFilter, categoryFilter, tagFilter, overdueOnly, minFollowers, maxFollowers])
 
   const categories = useMemo(() => {
     const cats = new Set(influencers.map((i) => i.category).filter(Boolean) as string[])
@@ -86,14 +91,22 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
         (i) => i.next_followup_date != null && i.next_followup_date <= today && i.current_stage !== '完成'
       )
     }
+    const min = minFollowers ? parseInt(minFollowers, 10) : null
+    const max = maxFollowers ? parseInt(maxFollowers, 10) : null
+    if (min != null && !isNaN(min)) list = list.filter((i) => (i.followers_count ?? 0) >= min)
+    if (max != null && !isNaN(max)) list = list.filter((i) => (i.followers_count ?? 0) <= max)
     return list
-  }, [influencers, search, stageFilter, categoryFilter, overdueOnly, today])
+  }, [influencers, search, stageFilter, categoryFilter, overdueOnly, today, minFollowers, maxFollowers])
 
   const activeFilters = [
     stageFilter && { key: 'stage', label: stageFilter },
     categoryFilter && { key: 'category', label: categoryFilter },
     tagFilter && { key: 'tag', label: `#${tagFilter}` },
     overdueOnly && { key: 'overdue', label: '逾期跟进' },
+    (minFollowers || maxFollowers) && {
+      key: 'followers',
+      label: `粉丝 ${minFollowers ? minFollowers + '+' : ''}${minFollowers && maxFollowers ? '~' : ''}${maxFollowers ? maxFollowers + '-' : ''}`.trim(),
+    },
   ].filter(Boolean) as { key: string; label: string }[]
 
   function clearFilter(key: string) {
@@ -101,6 +114,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     if (key === 'category') setCategoryFilter('')
     if (key === 'tag') setTagFilter('')
     if (key === 'overdue') setOverdueOnly(false)
+    if (key === 'followers') { setMinFollowers(''); setMaxFollowers('') }
   }
 
   function clearAll() {
@@ -109,6 +123,8 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     setCategoryFilter('')
     setTagFilter('')
     setOverdueOnly(false)
+    setMinFollowers('')
+    setMaxFollowers('')
   }
 
   function handleExport() {
@@ -157,84 +173,132 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 py-4 border-b bg-white flex items-center gap-3 flex-wrap">
-        <h1 className="text-lg font-semibold text-gray-900 mr-auto">红人库</h1>
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b bg-white">
+        {/* Top row: title + actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-lg font-semibold text-gray-900 mr-auto">红人库</h1>
 
-        <div className="relative w-56">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-          <Input
-            className="pl-8 h-9"
-            placeholder="搜索用户名、备注…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          {/* Mobile filter toggle */}
+          <button
+            className={`md:hidden h-9 px-3 text-sm rounded-md border flex items-center gap-1.5 transition-colors ${
+              showFilters ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            筛选{activeFilters.length > 0 ? ` (${activeFilters.length})` : ''}
+          </button>
+
+          <div className="flex items-center border rounded-md overflow-hidden">
+            <button
+              className={`px-2.5 py-1.5 text-sm flex items-center gap-1.5 transition-colors ${view === 'table' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
+              onClick={() => setView('table')}
+            >
+              <List className="h-4 w-4" /><span className="hidden sm:inline">表格</span>
+            </button>
+            <button
+              className={`px-2.5 py-1.5 text-sm flex items-center gap-1.5 transition-colors border-l ${view === 'kanban' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
+              onClick={() => setView('kanban')}
+            >
+              <LayoutGrid className="h-4 w-4" /><span className="hidden sm:inline">看板</span>
+            </button>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="hidden sm:flex">
+            <Upload className="h-4 w-4 mr-1.5" />导入
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} className="hidden sm:flex">
+            <Download className="h-4 w-4 mr-1.5" />导出
+          </Button>
+          <Button size="sm" onClick={() => setShowAdd(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /><span className="hidden sm:inline">添加红人</span><span className="sm:hidden">添加</span>
+          </Button>
         </div>
 
-        <select
-          className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer"
-          value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value)}
-        >
-          <option value="">全部阶段</option>
-          {ALL_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        {/* Filter bar — always visible on desktop, toggle on mobile */}
+        <div className={`mt-2 flex items-center gap-2 flex-wrap ${showFilters ? 'flex' : 'hidden md:flex'}`}>
+          <div className="relative w-full sm:w-52">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Input
+              className="pl-8 h-9"
+              placeholder="搜索用户名、备注…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
-        {categories.length > 0 && (
           <select
-            className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer flex-1 sm:flex-none"
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
           >
-            <option value="">全部分类</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            <option value="">全部阶段</option>
+            {ALL_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-        )}
 
-        {allTags.length > 0 && (
-          <select
-            className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer"
-            value={tagFilter}
-            onChange={(e) => setTagFilter(e.target.value)}
-          >
-            <option value="">全部标签</option>
-            {allTags.map((t) => <option key={t} value={t}>#{t}</option>)}
-          </select>
-        )}
+          {categories.length > 0 && (
+            <select
+              className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer flex-1 sm:flex-none"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="">全部分类</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
 
-        <button
-          className={`h-9 px-3 text-sm rounded-md border flex items-center gap-1.5 transition-colors ${
-            overdueOnly ? 'bg-red-50 border-red-300 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-          }`}
-          onClick={() => setOverdueOnly((v) => !v)}
-        >
-          <AlertCircle className="h-3.5 w-3.5" />
-          逾期跟进
-        </button>
+          {allTags.length > 0 && (
+            <select
+              className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer flex-1 sm:flex-none"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+            >
+              <option value="">全部标签</option>
+              {allTags.map((t) => <option key={t} value={t}>#{t}</option>)}
+            </select>
+          )}
 
-        <div className="flex items-center border rounded-md overflow-hidden">
+          {/* Follower range filter */}
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              placeholder="最小粉丝"
+              value={minFollowers}
+              onChange={(e) => setMinFollowers(e.target.value)}
+              className="h-9 w-24 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700"
+            />
+            <span className="text-gray-400 text-xs">~</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="最大粉丝"
+              value={maxFollowers}
+              onChange={(e) => setMaxFollowers(e.target.value)}
+              className="h-9 w-24 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700"
+            />
+          </div>
+
           <button
-            className={`px-2.5 py-1.5 text-sm flex items-center gap-1.5 transition-colors ${view === 'table' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
-            onClick={() => setView('table')}
+            className={`h-9 px-3 text-sm rounded-md border flex items-center gap-1.5 transition-colors ${
+              overdueOnly ? 'bg-red-50 border-red-300 text-red-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+            onClick={() => setOverdueOnly((v) => !v)}
           >
-            <List className="h-4 w-4" />表格
+            <AlertCircle className="h-3.5 w-3.5" />
+            逾期跟进
           </button>
-          <button
-            className={`px-2.5 py-1.5 text-sm flex items-center gap-1.5 transition-colors border-l ${view === 'kanban' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
-            onClick={() => setView('kanban')}
-          >
-            <LayoutGrid className="h-4 w-4" />看板
-          </button>
+
+          {/* Mobile-only: import/export inside filter bar */}
+          <div className="flex items-center gap-2 sm:hidden w-full">
+            <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="flex-1">
+              <Upload className="h-4 w-4 mr-1.5" />导入
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExport} className="flex-1">
+              <Download className="h-4 w-4 mr-1.5" />导出
+            </Button>
+          </div>
         </div>
-
-        <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
-          <Upload className="h-4 w-4 mr-1.5" />导入
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleExport}>
-          <Download className="h-4 w-4 mr-1.5" />导出
-        </Button>
-        <Button size="sm" onClick={() => setShowAdd(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />添加红人
-        </Button>
       </div>
 
       {/* Filter chips + count */}
