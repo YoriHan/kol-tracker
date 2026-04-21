@@ -860,33 +860,82 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function EditableText({
   value, onSave, placeholder,
 }: { value: string | null; onSave: (v: string | null) => void; placeholder?: string }) {
+  const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value ?? '')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync external value changes (e.g. after rollback)
+  useEffect(() => { if (!editing) setV(value ?? '') }, [value, editing])
+
+  function commit() {
+    setEditing(false)
+    onSave(v.trim() || null)
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        autoFocus
+        type="text"
+        className="w-full text-sm border border-blue-400 rounded px-2 py-1 outline-none ring-1 ring-blue-300"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setV(value ?? ''); setEditing(false) } }}
+      />
+    )
+  }
+
   return (
-    <input
-      type="text"
-      className="w-full text-sm border border-gray-200 rounded px-2 py-1"
-      placeholder={placeholder ?? '—'}
-      value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => onSave(v.trim() || null)}
-    />
+    <div
+      className="group flex items-center gap-1 cursor-pointer min-h-[30px] px-2 py-1 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+      onClick={() => setEditing(true)}
+    >
+      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v || (placeholder ?? '点击编辑')}</span>
+      <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
+    </div>
   )
 }
 
 function EditableNumber({
   value, onSave, prefix,
 }: { value: number | null; onSave: (v: number | null) => void; prefix?: string }) {
+  const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value?.toString() ?? '')
+
+  useEffect(() => { if (!editing) setV(value?.toString() ?? '') }, [value, editing])
+
+  function commit() {
+    setEditing(false)
+    onSave(v ? parseFloat(v) : null)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        {prefix && <span className="text-sm text-gray-400">{prefix}</span>}
+        <input
+          autoFocus
+          type="number"
+          className="w-full text-sm border border-blue-400 rounded px-2 py-1 outline-none ring-1 ring-blue-300"
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setV(value?.toString() ?? ''); setEditing(false) } }}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-center gap-1">
+    <div
+      className="group flex items-center gap-1 cursor-pointer min-h-[30px] px-2 py-1 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+      onClick={() => setEditing(true)}
+    >
       {prefix && <span className="text-sm text-gray-400">{prefix}</span>}
-      <input
-        type="number"
-        className="w-full text-sm border border-gray-200 rounded px-2 py-1"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => onSave(v ? parseFloat(v) : null)}
-      />
+      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v ? Number(v).toLocaleString() : '点击编辑'}</span>
+      <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
     </div>
   )
 }
@@ -894,22 +943,49 @@ function EditableNumber({
 function EditableUrl({
   value, onSave, placeholder,
 }: { value: string | null; onSave: (v: string | null) => void; placeholder?: string }) {
+  const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value ?? '')
+
+  useEffect(() => { if (!editing) setV(value ?? '') }, [value, editing])
+
+  function commit() {
+    setEditing(false)
+    onSave(v.trim() || null)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          autoFocus
+          type="url"
+          className="flex-1 text-sm border border-blue-400 rounded px-2 py-1 outline-none ring-1 ring-blue-300"
+          placeholder={placeholder ?? 'https://…'}
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setV(value ?? ''); setEditing(false) } }}
+        />
+        {v && (
+          <a href={v} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-500 shrink-0">
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex items-center gap-1">
-      <input
-        type="url"
-        className="flex-1 text-sm border border-gray-200 rounded px-2 py-1"
-        placeholder={placeholder ?? 'https://…'}
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => onSave(v.trim() || null)}
-      />
-      {v && (
-        <a href={v} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-500 shrink-0">
-          <ExternalLink className="h-4 w-4" />
-        </a>
+    <div
+      className="group flex items-center gap-1 cursor-pointer min-h-[30px] px-2 py-1 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+      onClick={() => setEditing(true)}
+    >
+      {v ? (
+        <a href={v} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 text-sm text-blue-600 hover:underline truncate">{v}</a>
+      ) : (
+        <span className="flex-1 text-sm text-gray-400">{placeholder ?? '点击添加链接'}</span>
       )}
+      <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
     </div>
   )
 }
