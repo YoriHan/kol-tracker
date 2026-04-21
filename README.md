@@ -204,18 +204,25 @@ cd kol-tracker
 npm install
 
 # 3. 配置环境变量
-# 新建 .env.local，填入：
+cp .env.local.example .env.local
+# 编辑 .env.local，填入三个必填项：
 # NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 # NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+# SUPABASE_SERVICE_ROLE_KEY=eyJ...   ← 在 Supabase 控制台 Settings → API 获取
 
 # 4. 初始化数据库
-# 在 Supabase SQL 编辑器中执行 supabase/schema.sql
+# 在 Supabase SQL 编辑器中依次执行：
+# ① supabase/schema.sql          ← 主表结构
+# ② supabase/migrations/*.sql    ← 增量 migration（如 add_tags_to_influencers.sql）
 
 # 5. 启动
 npm run dev
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)，注册账号即可使用。
+
+> **Twitter API（可选）**：`.env.local.example` 中包含 `TWITTER_CLIENT_ID` 等字段，
+> 这是 Phase 2 功能（粉丝数自动同步），暂时留空不影响使用。
 
 ---
 
