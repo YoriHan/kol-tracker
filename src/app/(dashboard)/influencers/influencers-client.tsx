@@ -120,7 +120,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
       'publish_date', 'post_url',
       'impressions', 'engagement_rate', 'clicks',
       'invoice_number', 'invoice_amount', 'payment_status', 'payment_due_date', 'payment_date',
-      'notes', 'created_at',
+      'notes', 'tags', 'created_at',
     ]
     const displayHeaders = [
       'Twitter账号', '显示名称', '粉丝数', '分类', '简介',
@@ -130,7 +130,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
       '预定发布日', '发布链接',
       '曝光量', '互动率', '点击数',
       '发票编号', '发票金额', '付款状态', '付款截止日', '实际付款日',
-      '备注', '创建时间',
+      '备注', '标签', '创建时间',
     ]
     // resolve assigned_to → display name
     const profileMap = Object.fromEntries(profiles.map(p => [p.id, p.display_name || p.email]))
@@ -139,6 +139,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
       return headers.map((h) => {
         let val: unknown = rec[h]
         if (h === 'assigned_to' && val) val = profileMap[val as string] ?? val
+        if (h === 'tags') val = (i.tags ?? []).join(';') // semicolon-separated tag list
         if (typeof val === 'boolean') val = val ? '是' : '否'
         return `"${String(val ?? '').replace(/"/g, '""')}"`
       }).join(',')
