@@ -156,62 +156,87 @@ export function InfluencerDetail({
   const overdue = isFollowupOverdue(inf.next_followup_date)
 
   async function updateField<K extends keyof Influencer>(key: K, value: Influencer[K]) {
+    // Optimistic update — UI changes instantly
+    const prev = inf[key]
+    setInf((p) => ({ ...p, [key]: value }))
     setSaving(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from('influencers')
       .update({ [key]: value })
       .eq('id', inf.id)
-    if (!error) setInf((prev) => ({ ...prev, [key]: value }))
+    if (error) setInf((p) => ({ ...p, [key]: prev })) // rollback
     setSaving(false)
   }
 
   async function updateStage(stage: InfluencerStage) {
-    setSaving(true)
     const extra: Record<string, unknown> = {}
     const syncedStatus = PAYMENT_STAGE_SYNC[stage]
     if (syncedStatus) extra['payment_status'] = syncedStatus
+
+    // Optimistic update — stage badge changes instantly
+    const prevStage = inf.current_stage
+    setInf((p) => ({ ...p, current_stage: stage, ...extra }))
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any)
       .from('influencers')
       .update({ current_stage: stage, ...extra })
       .eq('id', inf.id)
-    if (!error) setInf((prev) => ({ ...prev, current_stage: stage, ...extra }))
+    if (error) {
+      setInf((p) => ({ ...p, current_stage: prevStage })) // rollback
+      return
+    }
 
-    // Log activity
+    // Log activity in background (don't block UI)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('activity_logs').insert({
+    ;(supabase as any).from('activity_logs').insert({
       influencer_id: inf.id,
       action: 'stage_changed',
       field_name: 'current_stage',
-      old_value: inf.current_stage,
+      old_value: prevStage,
       new_value: stage,
-      description: `阶段从「${inf.current_stage}」改为「${stage}」`,
+      description: `阶段从「${prevStage}」改为「${stage}」`,
     })
-    setSaving(false)
   }
 
   async function addCommunicationLog() {
     if (!logSummary.trim()) return
+    const summary = logSummary.trim()
+    const now = new Date().toISOString()
+
+    // Optimistic — show entry immediately
+    const tempId = `temp-${Date.now()}`
+    const optimisticEntry = {
+      id: tempId,
+      influencer_id: inf.id,
+      method: logMethod,
+      summary,
+      source: 'manual',
+      created_at: now,
+      profile: null,
+    } as CommunicationLog
+    setLogs((prev) => [optimisticEntry, ...prev])
+    setLogSummary('')
+    setInf((p) => ({ ...p, last_contact_date: now }))
+
     setAddingLog(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
       .from('communication_logs')
-      .insert({
-        influencer_id: inf.id,
-        method: logMethod,
-        summary: logSummary.trim(),
-        source: 'manual',
-      })
+      .insert({ influencer_id: inf.id, method: logMethod, summary, source: 'manual' })
       .select('*, profile:profiles(id, display_name, email, avatar_url)')
       .single()
 
     if (!error && data) {
-      setLogs((prev) => [data as CommunicationLog, ...prev])
-      setLogSummary('')
-      // Update last_contact_date
-      await updateField('last_contact_date', new Date().toISOString())
+      // Replace optimistic entry with real one
+      setLogs((prev) => prev.map((l) => (l.id === tempId ? (data as CommunicationLog) : l)))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(supabase as any).from('influencers').update({ last_contact_date: now }).eq('id', inf.id)
+    } else {
+      // Rollback
+      setLogs((prev) => prev.filter((l) => l.id !== tempId))
+      setLogSummary(summary)
     }
     setAddingLog(false)
   }

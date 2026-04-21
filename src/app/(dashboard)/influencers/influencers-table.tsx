@@ -55,33 +55,25 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
 
   async function batchAssign(userId: string) {
     if (selected.size === 0) return
-    setBatchAssigning(true)
     const ids = Array.from(selected)
+    // Optimistic
+    onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, assigned_to: userId || null } : i))
+    setSelected(new Set())
+    setBatchAssigning(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('influencers')
-      .update({ assigned_to: userId || null })
-      .in('id', ids)
-    if (!error) {
-      onUpdate((prev) =>
-        prev.map((i) => selected.has(i.id) ? { ...i, assigned_to: userId || null } : i)
-      )
-      setSelected(new Set())
-    }
+    await (supabase as any).from('influencers').update({ assigned_to: userId || null }).in('id', ids)
     setBatchAssigning(false)
   }
 
   async function batchChangeStage(stage: InfluencerStage) {
     if (selected.size === 0) return
-    setBatchStageing(true)
     const ids = Array.from(selected)
+    // Optimistic
+    onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, current_stage: stage } : i))
+    setSelected(new Set())
+    setBatchStageing(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('influencers').update({ current_stage: stage }).in('id', ids)
-    if (!error) {
-      onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, current_stage: stage } : i))
-      setSelected(new Set())
-    }
+    await (supabase as any).from('influencers').update({ current_stage: stage }).in('id', ids)
     setBatchStageing(false)
   }
 
