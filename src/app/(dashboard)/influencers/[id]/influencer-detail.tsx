@@ -20,6 +20,7 @@ import { zhCN } from 'date-fns/locale'
 import {
   ArrowLeft, ExternalLink, AlertCircle, Plus,
   FileText, DollarSign, BarChart2, MessageSquare, Clock, Link2, Copy, Check,
+  Download, Tag, X,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AttributionChart } from '@/components/attribution-chart'
@@ -151,6 +152,104 @@ export function InfluencerDetail({
       const pos = before.length + name.length + 2
       logInputRef.current?.setSelectionRange(pos, pos)
     }, 0)
+  }
+
+  // Tags
+  const [tagInput, setTagInput] = useState('')
+  const tags = inf.tags ?? []
+
+  async function addTag(tag: string) {
+    const t = tag.trim().toLowerCase()
+    if (!t || tags.includes(t)) { setTagInput(''); return }
+    const next = [...tags, t]
+    setInf((p) => ({ ...p, tags: next }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('influencers').update({ tags: next }).eq('id', inf.id)
+    setTagInput('')
+  }
+
+  async function removeTag(tag: string) {
+    const next = tags.filter((t) => t !== tag)
+    setInf((p) => ({ ...p, tags: next }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('influencers').update({ tags: next }).eq('id', inf.id)
+  }
+
+  async function handleExportPDF() {
+    const { jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
+    const doc = new jsPDF()
+    const name = inf.display_name ?? inf.twitter_handle
+
+    // Title
+    doc.setFontSize(18)
+    doc.text(`KOL 报告：${name}`, 14, 20)
+    doc.setFontSize(10)
+    doc.setTextColor(100)
+    doc.text(`@${inf.twitter_handle}  |  ${inf.current_stage}  |  生成时间：${new Date().toLocaleDateString('zh-CN')}`, 14, 28)
+    doc.setTextColor(0)
+
+    // Basic info table
+    autoTable(doc, {
+      startY: 35,
+      head: [['字段', '值']],
+      body: [
+        ['分类', inf.category ?? '—'],
+        ['粉丝数', inf.followers_count ? inf.followers_count.toLocaleString() : '—'],
+        ['合作阶段', inf.current_stage],
+        ['下次跟进', inf.next_followup_date ?? '—'],
+        ['最后联系', inf.last_contact_date ?? '—'],
+        ['标签', tags.join(', ') || '—'],
+        ['备注', inf.notes ?? '—'],
+      ],
+      headStyles: { fillColor: [59, 130, 246] },
+      styles: { fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
+    })
+
+    // Deal / Finance table
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalY1 = (doc as any).lastAutoTable.finalY + 8
+    doc.setFontSize(12)
+    doc.text('合作与财务', 14, finalY1)
+    autoTable(doc, {
+      startY: finalY1 + 4,
+      head: [['字段', '值']],
+      body: [
+        ['合作形式', inf.deal_type ?? '—'],
+        ['报价/条', inf.quote_per_post ? `¥${inf.quote_per_post.toLocaleString()}` : '—'],
+        ['合同金额', inf.contract_value ? `¥${inf.contract_value.toLocaleString()}` : '—'],
+        ['付款状态', inf.payment_status ?? '—'],
+        ['发票金额', inf.invoice_amount ? `¥${inf.invoice_amount.toLocaleString()}` : '—'],
+        ['付款截止', inf.payment_due_date ?? '—'],
+        ['实际付款', inf.payment_date ?? '—'],
+      ],
+      headStyles: { fillColor: [16, 185, 129] },
+      styles: { fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
+    })
+
+    // Performance
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const finalY2 = (doc as any).lastAutoTable.finalY + 8
+    doc.setFontSize(12)
+    doc.text('效果数据', 14, finalY2)
+    autoTable(doc, {
+      startY: finalY2 + 4,
+      head: [['字段', '值']],
+      body: [
+        ['曝光量', inf.impressions ? inf.impressions.toLocaleString() : '—'],
+        ['互动率', inf.engagement_rate ? `${inf.engagement_rate}%` : '—'],
+        ['点击数（手动）', inf.clicks ? inf.clicks.toLocaleString() : '—'],
+        ['追踪点击数', attrStats ? attrStats.clicks.toLocaleString() : '—'],
+        ['转化数', attrStats ? attrStats.conversions.toLocaleString() : '—'],
+      ],
+      headStyles: { fillColor: [168, 85, 247] },
+      styles: { fontSize: 10 },
+      columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold' } },
+    })
+
+    doc.save(`kol-report-${inf.twitter_handle}-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
   const overdue = isFollowupOverdue(inf.next_followup_date)
@@ -306,6 +405,9 @@ export function InfluencerDetail({
               ))}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExportPDF}>
+            <Download className="h-3.5 w-3.5" />导出 PDF
+          </Button>
         </div>
       </div>
 
@@ -356,6 +458,33 @@ export function InfluencerDetail({
                       value={inf.next_followup_date ?? ''}
                       onChange={(e) => updateField('next_followup_date', e.target.value || null)}
                     />
+                  </Field>
+                  <Field label="标签">
+                    <div className="space-y-1.5">
+                      {tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {tags.map((t) => (
+                            <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200">
+                              <Tag className="h-2.5 w-2.5" />{t}
+                              <button onClick={() => removeTag(t)} className="hover:text-red-500 ml-0.5">
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          className="flex-1 text-xs border border-gray-200 rounded px-2 py-1"
+                          placeholder="添加标签，回车确认"
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } }}
+                        />
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => addTag(tagInput)}>添加</Button>
+                      </div>
+                    </div>
                   </Field>
                   <Field label="备注">
                     <textarea

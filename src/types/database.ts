@@ -100,6 +100,8 @@ export interface Influencer {
   payment_status: PaymentStatus
   payment_due_date: string | null
   payment_date: string | null
+  // Tags / labels
+  tags: string[] | null
   created_at: string
   updated_at: string
   // joined

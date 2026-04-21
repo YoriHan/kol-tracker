@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Upload, Download, LayoutGrid, List, X, AlertCircle } from 'lucide-react'
+import { Search, Plus, Upload, Download, LayoutGrid, List, X, AlertCircle, Tag } from 'lucide-react'
 import type { Influencer, InfluencerStage, Profile } from '@/types/database'
 import { InfluencersTable } from './influencers-table'
 import { InfluencersKanban } from './influencers-kanban'
@@ -37,6 +37,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   const [search, setSearch] = useState(() => readParam('q'))
   const [stageFilter, setStageFilter] = useState(() => readParam('stage'))
   const [categoryFilter, setCategoryFilter] = useState(() => readParam('category'))
+  const [tagFilter, setTagFilter] = useState(() => readParam('tag'))
   const [overdueOnly, setOverdueOnly] = useState(() => readParam('overdue') === '1')
 
   // Sync filters to URL without triggering Next.js navigation
@@ -45,15 +46,22 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     if (search) params.set('q', search)
     if (stageFilter) params.set('stage', stageFilter)
     if (categoryFilter) params.set('category', categoryFilter)
+    if (tagFilter) params.set('tag', tagFilter)
     if (overdueOnly) params.set('overdue', '1')
     const qs = params.toString()
     const url = window.location.pathname + (qs ? '?' + qs : '')
     window.history.replaceState(null, '', url)
-  }, [search, stageFilter, categoryFilter, overdueOnly])
+  }, [search, stageFilter, categoryFilter, tagFilter, overdueOnly])
 
   const categories = useMemo(() => {
     const cats = new Set(influencers.map((i) => i.category).filter(Boolean) as string[])
     return Array.from(cats).sort()
+  }, [influencers])
+
+  const allTags = useMemo(() => {
+    const t = new Set<string>()
+    influencers.forEach((i) => (i.tags ?? []).forEach((tag) => t.add(tag)))
+    return Array.from(t).sort()
   }, [influencers])
 
   const today = new Date().toISOString().slice(0, 10)
@@ -72,6 +80,7 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     }
     if (stageFilter) list = list.filter((i) => i.current_stage === stageFilter)
     if (categoryFilter) list = list.filter((i) => i.category === categoryFilter)
+    if (tagFilter) list = list.filter((i) => (i.tags ?? []).includes(tagFilter))
     if (overdueOnly) {
       list = list.filter(
         (i) => i.next_followup_date != null && i.next_followup_date <= today && i.current_stage !== '完成'
@@ -83,12 +92,14 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
   const activeFilters = [
     stageFilter && { key: 'stage', label: stageFilter },
     categoryFilter && { key: 'category', label: categoryFilter },
+    tagFilter && { key: 'tag', label: `#${tagFilter}` },
     overdueOnly && { key: 'overdue', label: '逾期跟进' },
   ].filter(Boolean) as { key: string; label: string }[]
 
   function clearFilter(key: string) {
     if (key === 'stage') setStageFilter('')
     if (key === 'category') setCategoryFilter('')
+    if (key === 'tag') setTagFilter('')
     if (key === 'overdue') setOverdueOnly(false)
   }
 
@@ -96,16 +107,43 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
     setSearch('')
     setStageFilter('')
     setCategoryFilter('')
+    setTagFilter('')
     setOverdueOnly(false)
   }
 
   function handleExport() {
-    const headers = ['twitter_handle','display_name','followers_count','category','current_stage','next_followup_date','contract_value','payment_status']
+    const headers = [
+      'twitter_handle', 'display_name', 'followers_count', 'category', 'bio',
+      'current_stage', 'assigned_to', 'last_contact_date', 'next_followup_date',
+      'deal_type', 'quote_per_post', 'contract_value', 'contract_url',
+      'draft1_done', 'draft1_url', 'draft2_done', 'draft2_url',
+      'publish_date', 'post_url',
+      'impressions', 'engagement_rate', 'clicks',
+      'invoice_number', 'invoice_amount', 'payment_status', 'payment_due_date', 'payment_date',
+      'notes', 'created_at',
+    ]
+    const displayHeaders = [
+      'Twitter账号', '显示名称', '粉丝数', '分类', '简介',
+      '合作阶段', '负责人', '最后联系日期', '下次跟进日期',
+      '合作形式', '报价/条', '合同金额', '合同链接',
+      'Draft1完成', 'Draft1链接', 'Draft2完成', 'Draft2链接',
+      '预定发布日', '发布链接',
+      '曝光量', '互动率', '点击数',
+      '发票编号', '发票金额', '付款状态', '付款截止日', '实际付款日',
+      '备注', '创建时间',
+    ]
+    // resolve assigned_to → display name
+    const profileMap = Object.fromEntries(profiles.map(p => [p.id, p.display_name || p.email]))
     const rows = filtered.map((i) => {
       const rec = i as unknown as Record<string, unknown>
-      return headers.map((h) => `"${String(rec[h] ?? '').replace(/"/g, '""')}"`).join(',')
+      return headers.map((h) => {
+        let val: unknown = rec[h]
+        if (h === 'assigned_to' && val) val = profileMap[val as string] ?? val
+        if (typeof val === 'boolean') val = val ? '是' : '否'
+        return `"${String(val ?? '').replace(/"/g, '""')}"`
+      }).join(',')
     })
-    const csv = [headers.join(','), ...rows].join('\n')
+    const csv = [displayHeaders.join(','), ...rows].join('\n')
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -148,6 +186,17 @@ export function InfluencersClient({ initialInfluencers, profiles }: InfluencersC
           >
             <option value="">全部分类</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+
+        {allTags.length > 0 && (
+          <select
+            className="h-9 text-sm border border-gray-200 rounded-md px-2 bg-white text-gray-700 cursor-pointer"
+            value={tagFilter}
+            onChange={(e) => setTagFilter(e.target.value)}
+          >
+            <option value="">全部标签</option>
+            {allTags.map((t) => <option key={t} value={t}>#{t}</option>)}
           </select>
         )}
 
