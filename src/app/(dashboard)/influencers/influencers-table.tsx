@@ -12,10 +12,10 @@ import { StageBadge } from '@/components/influencers/stage-badge'
 import { StalenessBadge } from '@/components/influencers/staleness-badge'
 import { isFollowupOverdue } from '@/lib/staleness'
 import type { Influencer, Profile, InfluencerStage } from '@/types/database'
-import { formatDistanceToNow } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
 import { MoreHorizontal, AlertCircle, Users, Tag } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useTranslation } from '@/lib/i18n/provider'
+import { formatRelative } from '@/lib/i18n/format'
 
 interface InfluencersTableProps {
   influencers: Influencer[]
@@ -23,8 +23,8 @@ interface InfluencersTableProps {
   onUpdate: (updater: (prev: Influencer[]) => Influencer[]) => void
 }
 
-function formatFollowers(n: number | null): string {
-  if (n == null) return '—'
+function formatFollowers(n: number | null, dash: string): string {
+  if (n == null) return dash
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
   return n.toString()
@@ -33,6 +33,8 @@ function formatFollowers(n: number | null): string {
 export function InfluencersTable({ influencers, profiles, onUpdate }: InfluencersTableProps) {
   const supabase = createClient()
   const router = useRouter()
+  const { t, tStage, tCategory, locale } = useTranslation()
+  const dash = t('common.dash')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchAssigning, setBatchAssigning] = useState(false)
   const [batchStageing, setBatchStageing] = useState(false)
@@ -56,7 +58,6 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
   async function batchAssign(userId: string) {
     if (selected.size === 0) return
     const ids = Array.from(selected)
-    // Optimistic
     onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, assigned_to: userId || null } : i))
     setSelected(new Set())
     setBatchAssigning(true)
@@ -68,7 +69,6 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
   async function batchChangeStage(stage: InfluencerStage) {
     if (selected.size === 0) return
     const ids = Array.from(selected)
-    // Optimistic
     onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, current_stage: stage } : i))
     setSelected(new Set())
     setBatchStageing(true)
@@ -78,7 +78,6 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
   }
 
   async function updateStage(id: string, stage: InfluencerStage) {
-    // Optimistic update — UI reflects change instantly
     onUpdate((prev) =>
       prev.map((i) => (i.id === id ? { ...i, current_stage: stage } : i))
     )
@@ -88,7 +87,6 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
       .update({ current_stage: stage })
       .eq('id', id)
     if (error) {
-      // Rollback on failure
       onUpdate((prev) => [...prev])
     }
   }
@@ -104,15 +102,15 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
       {/* Batch action bar */}
       {selected.size > 0 && (
         <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-200 px-4 py-2 flex items-center gap-3">
-          <span className="text-sm text-blue-700 font-medium">已选 {selected.size} 个</span>
+          <span className="text-sm text-blue-700 font-medium">{t('influencers.selectedCount', { n: selected.size })}</span>
           <div className="flex items-center gap-1.5">
             <Tag className="h-4 w-4 text-blue-500" />
             <Select onValueChange={(v) => batchChangeStage(v as InfluencerStage)} disabled={batchStageing}>
               <SelectTrigger className="h-7 w-36 text-xs border-blue-300">
-                <SelectValue placeholder="批量改阶段" />
+                <SelectValue placeholder={t('influencers.batchChangeStage')} />
               </SelectTrigger>
               <SelectContent>
-                {stages.map((s) => (<SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>))}
+                {stages.map((s) => (<SelectItem key={s} value={s} className="text-xs">{tStage(s)}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -120,10 +118,10 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
             <Users className="h-4 w-4 text-blue-500" />
             <Select onValueChange={(v) => batchAssign(v === '__clear__' ? '' : v)} disabled={batchAssigning}>
               <SelectTrigger className="h-7 w-36 text-xs border-blue-300">
-                <SelectValue placeholder="批量分配负责人" />
+                <SelectValue placeholder={t('influencers.batchAssign')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__clear__">清除负责人</SelectItem>
+                <SelectItem value="__clear__">{t('influencers.clearAssignee')}</SelectItem>
                 {profiles.map((p) => (
                   <SelectItem key={p.id} value={p.id} className="text-xs">
                     {p.display_name ?? p.email}
@@ -138,7 +136,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
             className="h-7 text-xs ml-auto"
             onClick={() => setSelected(new Set())}
           >
-            取消选择
+            {t('influencers.clearSelection')}
           </Button>
         </div>
       )}
@@ -154,14 +152,14 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 className="rounded"
               />
             </th>
-            <th className="px-4 py-3 font-medium w-48">红人</th>
-            <th className="px-4 py-3 font-medium hidden sm:table-cell">粉丝数</th>
-            <th className="px-4 py-3 font-medium hidden md:table-cell">类别</th>
-            <th className="px-4 py-3 font-medium">阶段</th>
-            <th className="px-4 py-3 font-medium hidden lg:table-cell">停留时间</th>
-            <th className="px-4 py-3 font-medium hidden md:table-cell">负责人</th>
-            <th className="px-4 py-3 font-medium hidden lg:table-cell">最近联系</th>
-            <th className="px-4 py-3 font-medium hidden sm:table-cell">跟进</th>
+            <th className="px-4 py-3 font-medium w-48">{t('influencers.columns.influencer')}</th>
+            <th className="px-4 py-3 font-medium hidden sm:table-cell">{t('influencers.columns.followers')}</th>
+            <th className="px-4 py-3 font-medium hidden md:table-cell">{t('influencers.columns.category')}</th>
+            <th className="px-4 py-3 font-medium">{t('influencers.columns.stage')}</th>
+            <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('influencers.columns.staleness')}</th>
+            <th className="px-4 py-3 font-medium hidden md:table-cell">{t('influencers.columns.assignee')}</th>
+            <th className="px-4 py-3 font-medium hidden lg:table-cell">{t('influencers.columns.lastContact')}</th>
+            <th className="px-4 py-3 font-medium hidden sm:table-cell">{t('influencers.columns.followup')}</th>
             <th className="px-4 py-3 font-medium w-10"></th>
           </tr>
         </thead>
@@ -169,7 +167,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
           {influencers.length === 0 && (
             <tr>
               <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
-                没有红人
+                {t('influencers.noInfluencers')}
               </td>
             </tr>
           )}
@@ -180,13 +178,11 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                 key={inf.id}
                 className={`hover:bg-gray-50 transition-colors cursor-pointer ${selected.has(inf.id) ? 'bg-blue-50' : ''}`}
                 onClick={(e) => {
-                  // Don't navigate if clicking checkbox or interactive elements
                   const target = e.target as HTMLElement
                   if (target.closest('input,button,[role="combobox"],[role="menu"],[role="menuitem"]')) return
                   router.push(`/influencers/${inf.id}`)
                 }}
               >
-                {/* Checkbox */}
                 <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -195,7 +191,6 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                     className="rounded"
                   />
                 </td>
-                {/* Influencer */}
                 <td className="px-4 py-3">
                   <Link
                     href={`/influencers/${inf.id}`}
@@ -216,48 +211,38 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                   </Link>
                 </td>
 
-                {/* Followers */}
                 <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">
-                  {formatFollowers(inf.followers_count)}
+                  {formatFollowers(inf.followers_count, dash)}
                 </td>
 
-                {/* Category */}
                 <td className="px-4 py-3 hidden md:table-cell">
                   {inf.category ? (
-                    <Badge variant="secondary" className="text-xs">{inf.category}</Badge>
+                    <Badge variant="secondary" className="text-xs">{tCategory(inf.category)}</Badge>
                   ) : (
-                    <span className="text-gray-300">—</span>
+                    <span className="text-gray-300">{dash}</span>
                   )}
                 </td>
 
-                {/* Stage */}
                 <td className="px-4 py-3">
                   <StageBadge stage={inf.current_stage} />
                 </td>
 
-                {/* Staleness */}
                 <td className="px-4 py-3 hidden lg:table-cell">
                   <StalenessBadge stageEnteredAt={inf.stage_entered_at} />
                 </td>
 
-                {/* Assigned */}
                 <td className="px-4 py-3 text-gray-600 text-xs hidden md:table-cell">
                   {inf.assigned_profile
                     ? inf.assigned_profile.display_name ?? inf.assigned_profile.email
-                    : <span className="text-gray-300">未分配</span>}
+                    : <span className="text-gray-300">{t('common.none')}</span>}
                 </td>
 
-                {/* Last contact */}
                 <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell">
                   {inf.last_contact_date
-                    ? formatDistanceToNow(new Date(inf.last_contact_date), {
-                        addSuffix: true,
-                        locale: zhCN,
-                      })
-                    : <span className="text-gray-300">—</span>}
+                    ? formatRelative(inf.last_contact_date, locale)
+                    : <span className="text-gray-300">{dash}</span>}
                 </td>
 
-                {/* Followup */}
                 <td className="px-4 py-3 hidden sm:table-cell">
                   {inf.next_followup_date ? (
                     <span className={`flex items-center gap-1 text-xs ${overdue ? 'text-red-600' : 'text-gray-500'}`}>
@@ -265,11 +250,10 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                       {inf.next_followup_date}
                     </span>
                   ) : (
-                    <span className="text-gray-300 text-xs">—</span>
+                    <span className="text-gray-300 text-xs">{dash}</span>
                   )}
                 </td>
 
-                {/* Actions */}
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -279,10 +263,10 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
                       <Link href={`/influencers/${inf.id}`}>
-                        <DropdownMenuItem>查看详情</DropdownMenuItem>
+                        <DropdownMenuItem>{t('influencers.actions.viewDetail')}</DropdownMenuItem>
                       </Link>
                       <DropdownMenuItem className="text-xs text-gray-400 pointer-events-none">
-                        更换阶段
+                        {t('influencers.actions.changeStage')}
                       </DropdownMenuItem>
                       {stages.map((s) => (
                         <DropdownMenuItem
@@ -290,7 +274,7 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
                           onClick={() => updateStage(inf.id, s)}
                           className={inf.current_stage === s ? 'font-medium' : ''}
                         >
-                          {s}
+                          {tStage(s)}
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>

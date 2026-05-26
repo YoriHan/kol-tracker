@@ -24,11 +24,9 @@ export function getStalenessColor(level: StalenessLevel): string {
   }
 }
 
-export function getStalenessLabel(days: number): string {
-  if (days === 0) return '今天'
-  if (days === 1) return '1天'
-  return `${days}天`
-}
+// Day-count formatting moved into the locale-aware StalenessBadge component
+// (see `src/components/influencers/staleness-badge.tsx`). The badge consumes
+// `staleness.days` / `staleness.today` from the i18n dictionary directly.
 
 export function isFollowupOverdue(nextFollowupDate: string | null): boolean {
   if (!nextFollowupDate) return false

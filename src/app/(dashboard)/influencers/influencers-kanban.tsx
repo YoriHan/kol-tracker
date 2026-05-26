@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { isFollowupOverdue } from '@/lib/staleness'
 import { AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useTranslation } from '@/lib/i18n/provider'
 
 interface InfluencersKanbanProps {
   influencers: Influencer[]
@@ -24,6 +25,7 @@ function formatFollowers(n: number | null): string {
 
 export function InfluencersKanban({ influencers, profiles, onUpdate }: InfluencersKanbanProps) {
   const supabase = createClient()
+  const { t, tStage, tCategory, tKanbanColumn } = useTranslation()
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
 
@@ -86,7 +88,7 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
           >
             {/* Column header */}
             <div className="px-3 py-2.5 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">{col.label}</span>
+              <span className="text-sm font-medium text-gray-700">{tKanbanColumn(col.id)}</span>
               <span className="text-xs text-gray-400 bg-white rounded-full px-2 py-0.5 font-medium">
                 {cards.length}
               </span>
@@ -95,7 +97,7 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
             {/* Cards */}
             <div className="flex flex-col gap-2 px-2 pb-3 overflow-y-auto max-h-[calc(100vh-180px)]">
               {cards.length === 0 && (
-                <div className="text-center text-xs text-gray-400 py-4">空</div>
+                <div className="text-center text-xs text-gray-400 py-4">{t('influencers.empty')}</div>
               )}
               {cards.map((inf) => {
                 const overdue = isFollowupOverdue(inf.next_followup_date)
@@ -130,7 +132,7 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
                     <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                       {inf.category && (
                         <span className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 truncate max-w-[80px]">
-                          {inf.category}
+                          {tCategory(inf.category)}
                         </span>
                       )}
                       {inf.followers_count && (
@@ -161,13 +163,13 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
                     })()}
 
                     {/* Sub-stage */}
-                    <div className="mt-1 text-xs text-gray-400 truncate">{inf.current_stage}</div>
+                    <div className="mt-1 text-xs text-gray-400 truncate">{tStage(inf.current_stage)}</div>
 
                     {/* Next followup date */}
                     {inf.next_followup_date && (
                       <div className={`mt-1 flex items-center gap-1 text-xs ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
                         {overdue && <AlertCircle className="h-3 w-3 shrink-0" />}
-                        跟进 {inf.next_followup_date}
+                        {t('influencers.followupAt', { date: inf.next_followup_date })}
                       </div>
                     )}
 
@@ -175,7 +177,7 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
                     {overdue && !inf.next_followup_date && (
                       <div className="mt-1.5 flex items-center gap-1 text-xs text-red-500">
                         <AlertCircle className="h-3 w-3" />
-                        跟进已逾期
+                        {t('influencers.followupOverdue')}
                       </div>
                     )}
                   </div>

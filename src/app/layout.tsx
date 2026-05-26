@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { LanguageProvider } from "@/lib/i18n/provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,9 +14,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Metadata is rendered server-side and cannot read client-side locale state.
+// Keep a single canonical title; the in-app UI handles translation.
 export const metadata: Metadata = {
   title: "KOL Tracker",
-  description: "Twitter 红人合作管理面板",
+  description: "Twitter 红人合作管理面板 / Twitter influencer collaboration tracker",
 };
 
 export default function RootLayout({
@@ -27,7 +31,12 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <LanguageProvider>
+          <LanguageSwitcher />
+          {children}
+        </LanguageProvider>
+      </body>
     </html>
   );
 }

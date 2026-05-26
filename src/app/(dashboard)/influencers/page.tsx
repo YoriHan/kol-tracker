@@ -18,14 +18,20 @@ export default async function InfluencersPage() {
     .select('id, display_name, email, avatar_url')
 
   if (error) {
-    return <div className="p-6 text-red-600">加载失败：{error.message}</div>
+    // SSR error path — rendered before the i18n provider mounts. Bilingual
+    // inline so users on either locale aren't left guessing.
+    return (
+      <div className="p-6 text-red-600">
+        加载失败 / Failed to load: {error.message}
+      </div>
+    )
   }
 
   const influencers = (raw ?? []) as Influencer[]
   const profiles = (profilesRaw ?? []) as Pick<Profile, 'id' | 'display_name' | 'email' | 'avatar_url'>[]
 
   return (
-    <Suspense fallback={<div className="p-6 text-gray-400 text-sm">加载中…</div>}>
+    <Suspense fallback={<div className="p-6 text-gray-400 text-sm">加载中… / Loading…</div>}>
       <InfluencersClient initialInfluencers={influencers} profiles={profiles} />
     </Suspense>
   )

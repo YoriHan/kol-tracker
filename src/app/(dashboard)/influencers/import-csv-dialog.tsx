@@ -5,6 +5,7 @@ import Papa from 'papaparse'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { useTranslation } from '@/lib/i18n/provider'
 import type { Influencer } from '@/types/database'
 import { Upload, AlertCircle, CheckCircle } from 'lucide-react'
 
@@ -17,6 +18,7 @@ interface ImportCsvDialogProps {
 type ParsedRow = Record<string, string>
 
 export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogProps) {
+  const { t } = useTranslation()
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'done'>('upload')
   const [rows, setRows] = useState<ParsedRow[]>([])
   const [errors, setErrors] = useState<string[]>([])
@@ -35,7 +37,7 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
         const errs: string[] = []
         const valid = results.data.filter((row: ParsedRow, i: number) => {
           if (!row['twitter_handle'] && !row['Twitter Handle'] && !row['handle']) {
-            errs.push(`第 ${i + 2} 行：缺少 twitter_handle`)
+            errs.push(t('importDialog.rowMissingHandle', { row: i + 2 }))
             return false
           }
           return true
@@ -97,18 +99,15 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>导入 CSV</DialogTitle>
+          <DialogTitle>{t('importDialog.title')}</DialogTitle>
         </DialogHeader>
 
         {step === 'upload' && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              CSV 必须包含 <code className="bg-gray-100 px-1 rounded">twitter_handle</code> 列。
-              可选列：display_name, followers_count, category, notes
-            </p>
+            <p className="text-sm text-gray-600">{t('importDialog.description')}</p>
             <label className="flex flex-col items-center gap-2 border-2 border-dashed border-gray-200 rounded-lg p-8 cursor-pointer hover:border-gray-300 transition-colors">
               <Upload className="h-8 w-8 text-gray-400" />
-              <span className="text-sm text-gray-500">点击选择 CSV 文件</span>
+              <span className="text-sm text-gray-500">{t('importDialog.selectFile')}</span>
               <input type="file" accept=".csv" className="hidden" onChange={handleFile} />
             </label>
           </div>
@@ -117,8 +116,8 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
         {step === 'preview' && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              找到 <strong>{rows.length}</strong> 条有效记录
-              {errors.length > 0 && <>，跳过 <strong>{errors.length}</strong> 条</>}
+              {t('importDialog.foundValid', { count: rows.length })}
+              {errors.length > 0 && t('importDialog.skipped', { count: errors.length })}
             </p>
             {errors.length > 0 && (
               <div className="text-xs text-red-600 bg-red-50 rounded p-3 space-y-1 max-h-24 overflow-y-auto">
@@ -129,9 +128,9 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">@handle</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">名称</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">类别</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">{t('importDialog.columns.handle')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">{t('importDialog.columns.name')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">{t('importDialog.columns.category')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -140,8 +139,8 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
                     return (
                       <tr key={i}>
                         <td className="px-3 py-1.5">@{n.twitter_handle}</td>
-                        <td className="px-3 py-1.5 text-gray-500">{n.display_name ?? '—'}</td>
-                        <td className="px-3 py-1.5 text-gray-500">{n.category ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{n.display_name ?? t('common.dash')}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{n.category ?? t('common.dash')}</td>
                       </tr>
                     )
                   })}
@@ -149,12 +148,12 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
               </table>
             </div>
             {rows.length > 20 && (
-              <p className="text-xs text-gray-400">仅显示前 20 条预览</p>
+              <p className="text-xs text-gray-400">{t('importDialog.only20Preview')}</p>
             )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={handleClose}>取消</Button>
+              <Button variant="outline" onClick={handleClose}>{t('common.cancel')}</Button>
               <Button onClick={handleImport} disabled={rows.length === 0}>
-                导入 {rows.length} 条
+                {t('importDialog.importN', { n: rows.length })}
               </Button>
             </div>
           </div>
@@ -162,7 +161,7 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
 
         {step === 'importing' && (
           <div className="py-8 text-center text-gray-500">
-            正在导入，请稍候…
+            {t('importDialog.importing')}
           </div>
         )}
 
@@ -171,15 +170,15 @@ export function ImportCsvDialog({ open, onClose, onImported }: ImportCsvDialogPr
             {errors.length === 0 ? (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="h-5 w-5" />
-                <span>成功导入 {imported} 条记录</span>
+                <span>{t('importDialog.success', { n: imported })}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 text-red-600">
                 <AlertCircle className="h-5 w-5" />
-                <span>导入失败：{errors[0]}</span>
+                <span>{t('importDialog.failed', { message: errors[0] })}</span>
               </div>
             )}
-            <Button className="w-full" onClick={handleClose}>关闭</Button>
+            <Button className="w-full" onClick={handleClose}>{t('common.close')}</Button>
           </div>
         )}
       </DialogContent>
