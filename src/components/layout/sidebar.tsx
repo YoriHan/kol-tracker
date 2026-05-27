@@ -10,16 +10,19 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-
-const navItems = [
-  { href: '/',          label: '首页',   icon: LayoutDashboard },
-  { href: '/influencers', label: '红人库', icon: Users },
-]
+import { useTranslation } from '@/lib/i18n/provider'
+import { LanguageSwitcher } from '@/components/layout/language-switcher'
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const { t } = useTranslation()
+
+  const navItems = [
+    { href: '/',           label: t('nav.home'),        icon: LayoutDashboard },
+    { href: '/influencers', label: t('nav.influencers'), icon: Users },
+  ]
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -28,8 +31,9 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 border-r bg-white h-screen flex flex-col">
-      <div className="px-4 py-5 border-b">
-        <span className="font-semibold text-gray-900">KOL Tracker</span>
+      <div className="px-4 py-5 border-b flex items-center justify-between gap-2">
+        <span className="font-semibold text-gray-900">{t('app.name')}</span>
+        <LanguageSwitcher />
       </div>
 
       <nav className="flex-1 px-2 py-3 space-y-1">
@@ -56,7 +60,7 @@ export function Sidebar() {
           className="flex w-full items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
         >
           <LogOut className="h-4 w-4" />
-          退出登录
+          {t('nav.signOut')}
         </button>
       </div>
     </aside>

@@ -1,4 +1,7 @@
-import { getStaleness, getStalenessColor, getStalenessLabel } from '@/lib/staleness'
+'use client'
+
+import { getStaleness, getStalenessColor } from '@/lib/staleness'
+import { useTranslation } from '@/lib/i18n/provider'
 import { cn } from '@/lib/utils'
 
 interface StalenessBadgeProps {
@@ -7,7 +10,9 @@ interface StalenessBadgeProps {
 }
 
 export function StalenessBadge({ stageEnteredAt, className }: StalenessBadgeProps) {
+  const { t } = useTranslation()
   const { days, level } = getStaleness(stageEnteredAt)
+  const label = days === 0 ? t('staleness.today') : t('staleness.days', { days })
 
   return (
     <span
@@ -17,7 +22,7 @@ export function StalenessBadge({ stageEnteredAt, className }: StalenessBadgeProp
         className
       )}
     >
-      {getStalenessLabel(days)}
+      {label}
     </span>
   )
 }

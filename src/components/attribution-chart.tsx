@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { format, subDays, parseISO } from 'date-fns'
+import { useTranslation } from '@/lib/i18n/provider'
 
 interface ClickEvent {
   created_at: string
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function AttributionChart({ clickEvents }: Props) {
+  const { t } = useTranslation()
   const data = useMemo(() => {
     const days: { date: string; clicks: number }[] = []
     for (let i = 29; i >= 0; i--) {
@@ -32,7 +34,7 @@ export function AttributionChart({ clickEvents }: Props) {
 
   if (!hasData) {
     return (
-      <p className="text-sm text-gray-400 py-4 text-center">暂无点击数据</p>
+      <p className="text-sm text-gray-400 py-4 text-center">{t('chart.noClickData')}</p>
     )
   }
 
@@ -49,7 +51,7 @@ export function AttributionChart({ clickEvents }: Props) {
         <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 6 }}
-          formatter={(v) => [String(v), '点击数']}
+          formatter={(v) => [String(v), t('chart.clicksLabel')]}
           
         />
         <Line

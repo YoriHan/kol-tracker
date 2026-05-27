@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from 'react'
 import { Bold, Italic, List } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n/provider'
 
 interface RichTextEditorProps {
   value: string | null
@@ -11,6 +12,7 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ value, onChange, className, rows = 3 }: RichTextEditorProps) {
+  const { t } = useTranslation()
   const editorRef = useRef<HTMLDivElement>(null)
   const lastHtmlRef = useRef<string>('')
 
@@ -49,7 +51,7 @@ export function RichTextEditor({ value, onChange, className, rows = 3 }: RichTex
           type="button"
           onMouseDown={(e) => { e.preventDefault(); execCmd('bold') }}
           className="p-1 rounded hover:bg-gray-200 text-gray-600"
-          title="加粗 (Ctrl+B)"
+          title={t('editor.bold')}
         >
           <Bold className="h-3.5 w-3.5" />
         </button>
@@ -57,7 +59,7 @@ export function RichTextEditor({ value, onChange, className, rows = 3 }: RichTex
           type="button"
           onMouseDown={(e) => { e.preventDefault(); execCmd('italic') }}
           className="p-1 rounded hover:bg-gray-200 text-gray-600"
-          title="斜体 (Ctrl+I)"
+          title={t('editor.italic')}
         >
           <Italic className="h-3.5 w-3.5" />
         </button>
@@ -65,11 +67,11 @@ export function RichTextEditor({ value, onChange, className, rows = 3 }: RichTex
           type="button"
           onMouseDown={(e) => { e.preventDefault(); execCmd('insertUnorderedList') }}
           className="p-1 rounded hover:bg-gray-200 text-gray-600"
-          title="无序列表"
+          title={t('editor.bulletList')}
         >
           <List className="h-3.5 w-3.5" />
         </button>
-        <span className="ml-auto text-xs text-gray-300">富文本</span>
+        <span className="ml-auto text-xs text-gray-300">{t('editor.label')}</span>
       </div>
       <div
         ref={editorRef}

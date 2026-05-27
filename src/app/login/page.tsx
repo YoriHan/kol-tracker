@@ -5,8 +5,11 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useTranslation } from '@/lib/i18n/provider'
+import { LanguageSwitcher } from '@/components/layout/language-switcher'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,26 +37,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 relative">
+      <div className="absolute top-3 right-3">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>KOL Tracker</CardTitle>
+          <CardTitle>{t('app.name')}</CardTitle>
           <CardDescription>
-            {mode === 'login' ? '登录你的账号' : '创建新账号'}
+            {mode === 'login' ? t('login.loginMode') : t('login.signupMode')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               type="email"
-              placeholder="邮箱"
+              placeholder={t('login.email')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
             <Input
               type="password"
-              placeholder="密码"
+              placeholder={t('login.password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -62,7 +68,7 @@ export default function LoginPage() {
               <p className="text-sm text-red-600">{error}</p>
             )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? '处理中...' : mode === 'login' ? '登录' : '注册'}
+              {loading ? t('login.processing') : mode === 'login' ? t('login.login') : t('login.signup')}
             </Button>
             <Button
               type="button"
@@ -70,7 +76,7 @@ export default function LoginPage() {
               className="w-full"
               onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
             >
-              {mode === 'login' ? '没有账号？注册' : '已有账号？登录'}
+              {mode === 'login' ? t('login.switchToSignup') : t('login.switchToLogin')}
             </Button>
           </form>
         </CardContent>

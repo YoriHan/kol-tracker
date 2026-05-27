@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { createClient } from '@/lib/supabase/client'
+import { useTranslation } from '@/lib/i18n/provider'
 import type { Influencer } from '@/types/database'
 
+// Stored values stay Chinese — display labels go through `tCategory`.
 const CATEGORIES = ['美妆','时尚','科技','游戏','美食','旅行','健身','生活方式','教育','金融','其他']
 
 interface AddInfluencerDialogProps {
@@ -18,6 +20,7 @@ interface AddInfluencerDialogProps {
 
 export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDialogProps) {
   const supabase = createClient()
+  const { t, tCategory } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,7 +50,7 @@ export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDia
     if (!cleanHandle) return
 
     if (cleanHandle.length > 15) {
-      setError('Twitter 用户名最长 15 位')
+      setError(t('addDialog.handleTooLong'))
       return
     }
 
@@ -68,7 +71,7 @@ export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDia
       .single()
 
     if (err) {
-      setError(err.message.includes('unique') ? '该用户名已存在' : err.message)
+      setError(err.message.includes('unique') ? t('addDialog.duplicateHandle') : err.message)
       setLoading(false)
       return
     }
@@ -92,13 +95,13 @@ export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDia
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>添加红人</DialogTitle>
+          <DialogTitle>{t('addDialog.title')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-xs text-gray-500 font-medium">Twitter 链接或用户名 *</label>
+            <label className="text-xs text-gray-500 font-medium">{t('addDialog.handleLabel')}</label>
             <Input
-              placeholder="https://x.com/username 或 @handle"
+              placeholder={t('addDialog.handlePlaceholder')}
               value={urlOrHandle}
               onChange={(e) => setUrlOrHandle(e.target.value)}
               required
@@ -107,46 +110,46 @@ export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDia
             {urlOrHandle && (() => {
               const parsed = parseHandle(urlOrHandle)
               return parsed ? (
-                <p className="text-xs text-gray-400">识别为：@{parsed}</p>
+                <p className="text-xs text-gray-400">{t('addDialog.parsedAs', { handle: parsed })}</p>
               ) : null
             })()}
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-gray-500 font-medium">显示名称</label>
+            <label className="text-xs text-gray-500 font-medium">{t('addDialog.displayNameLabel')}</label>
             <Input
-              placeholder="留空则显示用户名"
+              placeholder={t('addDialog.displayNamePlaceholder')}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-medium">粉丝数</label>
+              <label className="text-xs text-gray-500 font-medium">{t('addDialog.followersLabel')}</label>
               <Input
-                placeholder="如 1,234,567"
+                placeholder={t('addDialog.followersPlaceholder')}
                 value={followers}
                 onChange={(e) => setFollowers(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-medium">类别</label>
+              <label className="text-xs text-gray-500 font-medium">{t('addDialog.categoryLabel')}</label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger>
-                  <SelectValue placeholder="选择类别" />
+                  <SelectValue placeholder={t('addDialog.categoryPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                    <SelectItem key={c} value={c}>{tCategory(c)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-gray-500 font-medium">备注</label>
+            <label className="text-xs text-gray-500 font-medium">{t('addDialog.notesLabel')}</label>
             <textarea
               className="w-full text-sm border border-gray-200 rounded px-3 py-2 resize-none"
-              placeholder="可选备注…"
+              placeholder={t('addDialog.notesPlaceholder')}
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -154,9 +157,9 @@ export function AddInfluencerDialog({ open, onClose, onAdded }: AddInfluencerDia
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={handleClose}>取消</Button>
+            <Button type="button" variant="outline" onClick={handleClose}>{t('common.cancel')}</Button>
             <Button type="submit" disabled={loading || !urlOrHandle.trim()}>
-              {loading ? '添加中…' : '添加'}
+              {loading ? t('addDialog.submitting') : t('addDialog.submit')}
             </Button>
           </div>
         </form>

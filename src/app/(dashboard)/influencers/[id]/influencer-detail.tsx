@@ -14,10 +14,10 @@ import { StageBadge } from '@/components/influencers/stage-badge'
 import { StalenessBadge } from '@/components/influencers/staleness-badge'
 import { isFollowupOverdue } from '@/lib/staleness'
 import type {
-  Influencer, CommunicationLog, ActivityLog, Profile, InfluencerStage, ContactMethod
+  Influencer, CommunicationLog, ActivityLog, Profile, InfluencerStage, ContactMethod, DealType
 } from '@/types/database'
-import { format, formatDistanceToNow } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
+import { useTranslation } from '@/lib/i18n/provider'
+import { formatRelative, formatShortDateTime } from '@/lib/i18n/format'
 import {
   ArrowLeft, ExternalLink, AlertCircle, Plus,
   FileText, DollarSign, BarChart2, MessageSquare, Clock, Link2, Copy, Check,
@@ -33,6 +33,8 @@ interface InfluencerDetailProps {
   profiles: Pick<Profile, 'id' | 'display_name' | 'email' | 'avatar_url'>[]
 }
 
+// Stored values (Supabase enums) stay Chinese — display goes through `tStage`,
+// `tDealType`, etc.
 const STAGES: InfluencerStage[] = [
   '待接触','已发DM','谈判中','已签约',
   '合作中-Draft1','合作中-Draft2','待发布','已发送',
@@ -45,7 +47,7 @@ const PAYMENT_STAGE_SYNC: Partial<Record<InfluencerStage, string>> = {
 }
 
 const CATEGORIES = ['美妆','时尚','科技','游戏','美食','旅行','健身','生活方式','教育','金融','其他']
-const DEAL_TYPES = ['推文','视频','Story','直播','其他']
+const DEAL_TYPES: DealType[] = ['推文','视频','Story','直播','其他']
 const CONTACT_METHODS: ContactMethod[] = ['DM','邮件','电话','其他']
 
 export function InfluencerDetail({
@@ -53,6 +55,9 @@ export function InfluencerDetail({
 }: InfluencerDetailProps) {
   // Memoize supabase client so it doesn't trigger infinite re-renders
   const supabase = useMemo(() => createClient(), [])
+  const {
+    t, tStage, tDealType, tContactMethod, tPaymentStatus, tCategory, locale,
+  } = useTranslation()
   const [inf, setInf] = useState(initial)
   const [logs, setLogs] = useState(initialLogs)
   const [saving, setSaving] = useState(false)
@@ -177,8 +182,9 @@ export function InfluencerDetail({
   }
 
   function stripHtml(html: string | null): string {
-    if (!html) return '—'
-    return html.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim() || '—'
+    const dash = t('common.dash')
+    if (!html) return dash
+    return html.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim() || dash
   }
 
   async function handleExportPDF() {
@@ -186,27 +192,34 @@ export function InfluencerDetail({
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF()
     const name = inf.display_name ?? inf.twitter_handle
+    const dash = t('common.dash')
+    const dateLocale = locale === 'zh' ? 'zh-CN' : 'en-US'
 
     // Title
     doc.setFontSize(18)
-    doc.text(`KOL 报告：${name}`, 14, 20)
+    doc.text(t('detail.pdf.title', { name }), 14, 20)
     doc.setFontSize(10)
     doc.setTextColor(100)
-    doc.text(`@${inf.twitter_handle}  |  ${inf.current_stage}  |  生成时间：${new Date().toLocaleDateString('zh-CN')}`, 14, 28)
+    doc.text(
+      `@${inf.twitter_handle}  |  ${tStage(inf.current_stage)}  |  ${t('detail.fields.generatedAt')}: ${new Date().toLocaleDateString(dateLocale)}`,
+      14, 28,
+    )
     doc.setTextColor(0)
+
+    const fieldHead: [string, string] = [t('detail.pdf.fieldLabel'), t('detail.pdf.valueLabel')]
 
     // Basic info table
     autoTable(doc, {
       startY: 35,
-      head: [['字段', '值']],
+      head: [fieldHead],
       body: [
-        ['分类', inf.category ?? '—'],
-        ['粉丝数', inf.followers_count ? inf.followers_count.toLocaleString() : '—'],
-        ['合作阶段', inf.current_stage],
-        ['下次跟进', inf.next_followup_date ?? '—'],
-        ['最后联系', inf.last_contact_date ?? '—'],
-        ['标签', tags.join(', ') || '—'],
-        ['备注', stripHtml(inf.notes)],
+        [t('detail.fields.category'), inf.category ? tCategory(inf.category) : dash],
+        [t('detail.fields.followers'), inf.followers_count ? inf.followers_count.toLocaleString() : dash],
+        [t('detail.fields.stage'), tStage(inf.current_stage)],
+        [t('detail.fields.nextFollowup'), inf.next_followup_date ?? dash],
+        [t('detail.fields.lastContact'), inf.last_contact_date ?? dash],
+        [t('detail.fields.tags'), tags.join(', ') || dash],
+        [t('detail.fields.notes'), stripHtml(inf.notes)],
       ],
       headStyles: { fillColor: [59, 130, 246] },
       styles: { fontSize: 10 },
@@ -217,18 +230,18 @@ export function InfluencerDetail({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const finalY1 = (doc as any).lastAutoTable.finalY + 8
     doc.setFontSize(12)
-    doc.text('合作与财务', 14, finalY1)
+    doc.text(t('detail.pdf.sectionDeal'), 14, finalY1)
     autoTable(doc, {
       startY: finalY1 + 4,
-      head: [['字段', '值']],
+      head: [fieldHead],
       body: [
-        ['合作形式', inf.deal_type ?? '—'],
-        ['报价/条', inf.quote_per_post ? `¥${inf.quote_per_post.toLocaleString()}` : '—'],
-        ['合同金额', inf.contract_value ? `¥${inf.contract_value.toLocaleString()}` : '—'],
-        ['付款状态', inf.payment_status ?? '—'],
-        ['发票金额', inf.invoice_amount ? `¥${inf.invoice_amount.toLocaleString()}` : '—'],
-        ['付款截止', inf.payment_due_date ?? '—'],
-        ['实际付款', inf.payment_date ?? '—'],
+        [t('detail.fields.dealType'), inf.deal_type ? tDealType(inf.deal_type) : dash],
+        [t('detail.fields.quotePerPost'), inf.quote_per_post ? `¥${inf.quote_per_post.toLocaleString()}` : dash],
+        [t('detail.fields.contractValue'), inf.contract_value ? `¥${inf.contract_value.toLocaleString()}` : dash],
+        [t('detail.fields.paymentStatus'), inf.payment_status ? tPaymentStatus(inf.payment_status) : dash],
+        [t('detail.fields.invoiceAmount'), inf.invoice_amount ? `¥${inf.invoice_amount.toLocaleString()}` : dash],
+        [t('detail.fields.paymentDueDate'), inf.payment_due_date ?? dash],
+        [t('detail.fields.paymentDate'), inf.payment_date ?? dash],
       ],
       headStyles: { fillColor: [16, 185, 129] },
       styles: { fontSize: 10 },
@@ -239,16 +252,16 @@ export function InfluencerDetail({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const finalY2 = (doc as any).lastAutoTable.finalY + 8
     doc.setFontSize(12)
-    doc.text('效果数据', 14, finalY2)
+    doc.text(t('detail.pdf.sectionPerformance'), 14, finalY2)
     autoTable(doc, {
       startY: finalY2 + 4,
-      head: [['字段', '值']],
+      head: [fieldHead],
       body: [
-        ['曝光量', inf.impressions ? inf.impressions.toLocaleString() : '—'],
-        ['互动率', inf.engagement_rate ? `${inf.engagement_rate}%` : '—'],
-        ['点击数（手动）', inf.clicks ? inf.clicks.toLocaleString() : '—'],
-        ['追踪点击数', attrStats ? attrStats.clicks.toLocaleString() : '—'],
-        ['转化数', attrStats ? attrStats.conversions.toLocaleString() : '—'],
+        [t('detail.fields.impressions'), inf.impressions ? inf.impressions.toLocaleString() : dash],
+        [t('detail.fields.engagementRate'), inf.engagement_rate ? `${inf.engagement_rate}%` : dash],
+        [t('detail.pdf.manualClicks'), inf.clicks ? inf.clicks.toLocaleString() : dash],
+        [t('detail.pdf.trackedClicks'), attrStats ? attrStats.clicks.toLocaleString() : dash],
+        [t('detail.pdf.conversions'), attrStats ? attrStats.conversions.toLocaleString() : dash],
       ],
       headStyles: { fillColor: [168, 85, 247] },
       styles: { fontSize: 10 },
@@ -293,7 +306,9 @@ export function InfluencerDetail({
       return
     }
 
-    // Log activity in background (don't block UI)
+    // Log activity in background (don't block UI). Description is stored in
+    // Chinese — same as stored stage values, the per-locale display happens
+    // at render. Activity log render currently shows `description` as-is.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(supabase as any).from('activity_logs').insert({
       influencer_id: inf.id,
@@ -358,7 +373,7 @@ export function InfluencerDetail({
   }
 
   function formatFollowers(n: number | null) {
-    if (n == null) return '—'
+    if (n == null) return t('common.dash')
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
     return n.toString()
@@ -378,8 +393,8 @@ export function InfluencerDetail({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold text-gray-900">{inf.display_name ?? inf.twitter_handle}</h1>
-            {overdue && <AlertCircle className="h-4 w-4 text-red-500" aria-label="跟进已逾期" />}
-            {saving && <span className="text-xs text-gray-400">保存中…</span>}
+            {overdue && <AlertCircle className="h-4 w-4 text-red-500" aria-label={t('detail.followupOverdue')} />}
+            {saving && <span className="text-xs text-gray-400">{t('detail.saving')}</span>}
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <a
@@ -392,7 +407,7 @@ export function InfluencerDetail({
               <ExternalLink className="h-3 w-3" />
             </a>
             {inf.followers_count && (
-              <span className="text-gray-400">· {formatFollowers(inf.followers_count)} 粉丝</span>
+              <span className="text-gray-400">· {t('detail.followers', { count: formatFollowers(inf.followers_count) })}</span>
             )}
           </div>
         </div>
@@ -407,12 +422,12 @@ export function InfluencerDetail({
             </SelectTrigger>
             <SelectContent>
               {STAGES.map((s) => (
-                <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                <SelectItem key={s} value={s} className="text-xs">{tStage(s)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExportPDF}>
-            <Download className="h-3.5 w-3.5" />导出 PDF
+            <Download className="h-3.5 w-3.5" />{t('detail.exportPdf')}
           </Button>
         </div>
       </div>
@@ -421,43 +436,43 @@ export function InfluencerDetail({
       <div className="flex-1 overflow-auto p-3 md:p-6">
         <Tabs defaultValue="info">
           <TabsList className="mb-4 overflow-x-auto flex w-full sm:w-auto h-auto flex-nowrap">
-            <TabsTrigger value="info" className="shrink-0 text-xs sm:text-sm"><FileText className="h-3.5 w-3.5 mr-1" /><span className="hidden xs:inline">基础 & 合作</span><span className="xs:hidden">基础</span></TabsTrigger>
-            <TabsTrigger value="finance" className="shrink-0 text-xs sm:text-sm"><DollarSign className="h-3.5 w-3.5 mr-1" />财务</TabsTrigger>
-            <TabsTrigger value="performance" className="shrink-0 text-xs sm:text-sm"><BarChart2 className="h-3.5 w-3.5 mr-1" />效果</TabsTrigger>
-            <TabsTrigger value="logs" className="shrink-0 text-xs sm:text-sm"><MessageSquare className="h-3.5 w-3.5 mr-1" />沟通</TabsTrigger>
-            <TabsTrigger value="activity" className="shrink-0 text-xs sm:text-sm"><Clock className="h-3.5 w-3.5 mr-1" />日志</TabsTrigger>
-            <TabsTrigger value="attribution" className="shrink-0 text-xs sm:text-sm"><Link2 className="h-3.5 w-3.5 mr-1" />归因</TabsTrigger>
+            <TabsTrigger value="info" className="shrink-0 text-xs sm:text-sm"><FileText className="h-3.5 w-3.5 mr-1" /><span className="hidden xs:inline">{t('detail.tabs.info')}</span><span className="xs:hidden">{t('detail.tabs.infoShort')}</span></TabsTrigger>
+            <TabsTrigger value="finance" className="shrink-0 text-xs sm:text-sm"><DollarSign className="h-3.5 w-3.5 mr-1" />{t('detail.tabs.finance')}</TabsTrigger>
+            <TabsTrigger value="performance" className="shrink-0 text-xs sm:text-sm"><BarChart2 className="h-3.5 w-3.5 mr-1" />{t('detail.tabs.performance')}</TabsTrigger>
+            <TabsTrigger value="logs" className="shrink-0 text-xs sm:text-sm"><MessageSquare className="h-3.5 w-3.5 mr-1" />{t('detail.tabs.logs')}</TabsTrigger>
+            <TabsTrigger value="activity" className="shrink-0 text-xs sm:text-sm"><Clock className="h-3.5 w-3.5 mr-1" />{t('detail.tabs.activity')}</TabsTrigger>
+            <TabsTrigger value="attribution" className="shrink-0 text-xs sm:text-sm"><Link2 className="h-3.5 w-3.5 mr-1" />{t('detail.tabs.attribution')}</TabsTrigger>
           </TabsList>
 
           {/* Basic & Deal tab */}
           <TabsContent value="info" className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">基础信息</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.basicInfo')}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <Field label="类别">
+                  <Field label={t('detail.fields.category')}>
                     <Select value={inf.category ?? ''} onValueChange={(v) => updateField('category', v)}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="选择类别" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('detail.placeholders.selectCategory')} /></SelectTrigger>
                       <SelectContent>
-                        {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{tCategory(c)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="粉丝数">
-                    <EditableNumber value={inf.followers_count} onSave={(v) => updateField('followers_count', v)} />
+                  <Field label={t('detail.fields.followers')}>
+                    <EditableNumber value={inf.followers_count} onSave={(v) => updateField('followers_count', v)} placeholder={t('common.clickToEdit')} />
                   </Field>
-                  <Field label="负责人">
+                  <Field label={t('detail.fields.assignee')}>
                     <Select value={inf.assigned_to ?? '__none__'} onValueChange={(v) => updateField('assigned_to', v === '__none__' ? null : v)}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="未分配" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('detail.placeholders.noAssignee')} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none__">未分配</SelectItem>
+                        <SelectItem value="__none__">{t('detail.placeholders.noAssignee')}</SelectItem>
                         {profiles.map((p) => (
                           <SelectItem key={p.id} value={p.id}>{p.display_name ?? p.email}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="下次跟进">
+                  <Field label={t('detail.fields.nextFollowup')}>
                     <input
                       type="date"
                       className={`w-full text-sm border rounded px-2 py-1 ${overdue ? 'border-red-300 text-red-600' : 'border-gray-200'}`}
@@ -465,14 +480,14 @@ export function InfluencerDetail({
                       onChange={(e) => updateField('next_followup_date', e.target.value || null)}
                     />
                   </Field>
-                  <Field label="标签">
+                  <Field label={t('detail.fields.tags')}>
                     <div className="space-y-1.5">
                       {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {tags.map((t) => (
-                            <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200">
-                              <Tag className="h-2.5 w-2.5" />{t}
-                              <button onClick={() => removeTag(t)} className="hover:text-red-500 ml-0.5">
+                          {tags.map((tag) => (
+                            <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs border border-blue-200">
+                              <Tag className="h-2.5 w-2.5" />{tag}
+                              <button onClick={() => removeTag(tag)} className="hover:text-red-500 ml-0.5">
                                 <X className="h-2.5 w-2.5" />
                               </button>
                             </span>
@@ -483,16 +498,16 @@ export function InfluencerDetail({
                         <input
                           type="text"
                           className="flex-1 text-xs border border-gray-200 rounded px-2 py-1"
-                          placeholder="添加标签，回车确认"
+                          placeholder={t('detail.placeholders.addTagAndEnter')}
                           value={tagInput}
                           onChange={(e) => setTagInput(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } }}
                         />
-                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => addTag(tagInput)}>添加</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => addTag(tagInput)}>{t('detail.placeholders.addTag')}</Button>
                       </div>
                     </div>
                   </Field>
-                  <Field label="备注">
+                  <Field label={t('detail.fields.notes')}>
                     <RichTextEditor
                       value={inf.notes}
                       onChange={(html) => updateField('notes', html)}
@@ -503,24 +518,24 @@ export function InfluencerDetail({
               </Card>
 
               <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-sm">合作条款</CardTitle></CardHeader>
+                <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.dealTerms')}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
-                  <Field label="合作形式">
+                  <Field label={t('detail.fields.dealType')}>
                     <Select value={inf.deal_type ?? ''} onValueChange={(v) => updateField('deal_type', v as never || null)}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="选择形式" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('detail.placeholders.selectDealType')} /></SelectTrigger>
                       <SelectContent>
-                        {DEAL_TYPES.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        {DEAL_TYPES.map((d) => <SelectItem key={d} value={d}>{tDealType(d)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Field label="报价/条">
-                    <EditableNumber value={inf.quote_per_post} onSave={(v) => updateField('quote_per_post', v)} prefix="¥" />
+                  <Field label={t('detail.fields.quotePerPost')}>
+                    <EditableNumber value={inf.quote_per_post} onSave={(v) => updateField('quote_per_post', v)} prefix="¥" placeholder={t('common.clickToEdit')} />
                   </Field>
-                  <Field label="合同金额">
-                    <EditableNumber value={inf.contract_value} onSave={(v) => updateField('contract_value', v)} prefix="¥" />
+                  <Field label={t('detail.fields.contractValue')}>
+                    <EditableNumber value={inf.contract_value} onSave={(v) => updateField('contract_value', v)} prefix="¥" placeholder={t('common.clickToEdit')} />
                   </Field>
-                  <Field label="合同链接">
-                    <EditableUrl value={inf.contract_url} onSave={(v) => updateField('contract_url', v)} />
+                  <Field label={t('detail.fields.contractUrl')}>
+                    <EditableUrl value={inf.contract_url} onSave={(v) => updateField('contract_url', v)} placeholder={t('common.clickToAddLink')} />
                   </Field>
                 </CardContent>
               </Card>
@@ -528,7 +543,7 @@ export function InfluencerDetail({
 
             {/* Content progress */}
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-sm">内容进度</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.contentProgress')}</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -542,7 +557,7 @@ export function InfluencerDetail({
                       />
                       <label htmlFor="draft1" className="text-sm font-medium">Draft 1</label>
                     </div>
-                    <EditableUrl value={inf.draft1_url} onSave={(v) => updateField('draft1_url', v)} placeholder="Draft 1 链接" />
+                    <EditableUrl value={inf.draft1_url} onSave={(v) => updateField('draft1_url', v)} placeholder={t('detail.placeholders.draft1Url')} />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -555,11 +570,11 @@ export function InfluencerDetail({
                       />
                       <label htmlFor="draft2" className="text-sm font-medium">Draft 2</label>
                     </div>
-                    <EditableUrl value={inf.draft2_url} onSave={(v) => updateField('draft2_url', v)} placeholder="Draft 2 链接" />
+                    <EditableUrl value={inf.draft2_url} onSave={(v) => updateField('draft2_url', v)} placeholder={t('detail.placeholders.draft2Url')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="预定发布日">
+                  <Field label={t('detail.progress.publishDate')}>
                     <input
                       type="date"
                       className="w-full text-sm border border-gray-200 rounded px-2 py-1"
@@ -567,8 +582,8 @@ export function InfluencerDetail({
                       onChange={(e) => updateField('publish_date', e.target.value || null)}
                     />
                   </Field>
-                  <Field label="发布链接">
-                    <EditableUrl value={inf.post_url} onSave={(v) => updateField('post_url', v)} placeholder="发布后粘贴链接" />
+                  <Field label={t('detail.progress.postUrl')}>
+                    <EditableUrl value={inf.post_url} onSave={(v) => updateField('post_url', v)} placeholder={t('detail.placeholders.postUrlAfterPublish')} />
                   </Field>
                 </div>
               </CardContent>
@@ -578,25 +593,25 @@ export function InfluencerDetail({
           {/* Finance tab */}
           <TabsContent value="finance">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-sm">财务信息</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.finance')}</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="付款状态">
+                <Field label={t('detail.fields.paymentStatus')}>
                   <Select value={inf.payment_status} onValueChange={(v) => updateField('payment_status', v as never)}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="未开票">未开票</SelectItem>
-                      <SelectItem value="已开票">已开票</SelectItem>
-                      <SelectItem value="已付款">已付款</SelectItem>
+                      <SelectItem value="未开票">{tPaymentStatus('未开票')}</SelectItem>
+                      <SelectItem value="已开票">{tPaymentStatus('已开票')}</SelectItem>
+                      <SelectItem value="已付款">{tPaymentStatus('已付款')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Invoice 编号">
-                  <EditableText value={inf.invoice_number} onSave={(v) => updateField('invoice_number', v)} />
+                <Field label={t('detail.fields.invoiceNumber')}>
+                  <EditableText value={inf.invoice_number} onSave={(v) => updateField('invoice_number', v)} placeholder={t('common.clickToEdit')} />
                 </Field>
-                <Field label="Invoice 金额">
-                  <EditableNumber value={inf.invoice_amount} onSave={(v) => updateField('invoice_amount', v)} prefix="¥" />
+                <Field label={t('detail.fields.invoiceAmount')}>
+                  <EditableNumber value={inf.invoice_amount} onSave={(v) => updateField('invoice_amount', v)} prefix="¥" placeholder={t('common.clickToEdit')} />
                 </Field>
-                <Field label="付款截止日">
+                <Field label={t('detail.fields.paymentDueDate')}>
                   <input
                     type="date"
                     className="w-full text-sm border border-gray-200 rounded px-2 py-1"
@@ -604,7 +619,7 @@ export function InfluencerDetail({
                     onChange={(e) => updateField('payment_due_date', e.target.value || null)}
                   />
                 </Field>
-                <Field label="实际付款日">
+                <Field label={t('detail.fields.paymentDate')}>
                   <input
                     type="date"
                     className="w-full text-sm border border-gray-200 rounded px-2 py-1"
@@ -619,16 +634,16 @@ export function InfluencerDetail({
           {/* Performance tab */}
           <TabsContent value="performance">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-sm">效果数据（手动填入）</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.performanceManual')}</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-3 gap-4">
-                <Field label="曝光量">
-                  <EditableNumber value={inf.impressions} onSave={(v) => updateField('impressions', v)} />
+                <Field label={t('detail.fields.impressions')}>
+                  <EditableNumber value={inf.impressions} onSave={(v) => updateField('impressions', v)} placeholder={t('common.clickToEdit')} />
                 </Field>
-                <Field label="互动率 (%)">
-                  <EditableNumber value={inf.engagement_rate} onSave={(v) => updateField('engagement_rate', v)} />
+                <Field label={t('detail.fields.engagementRate')}>
+                  <EditableNumber value={inf.engagement_rate} onSave={(v) => updateField('engagement_rate', v)} placeholder={t('common.clickToEdit')} />
                 </Field>
-                <Field label="点击量">
-                  <EditableNumber value={inf.clicks} onSave={(v) => updateField('clicks', v)} />
+                <Field label={t('detail.fields.clicks')}>
+                  <EditableNumber value={inf.clicks} onSave={(v) => updateField('clicks', v)} placeholder={t('common.clickToEdit')} />
                 </Field>
               </CardContent>
             </Card>
@@ -638,7 +653,7 @@ export function InfluencerDetail({
           <TabsContent value="logs">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">沟通记录</CardTitle>
+                <CardTitle className="text-sm">{t('detail.cards.communicationLogs')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Add log form */}
@@ -648,14 +663,14 @@ export function InfluencerDetail({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {CONTACT_METHODS.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
+                      {CONTACT_METHODS.map((m) => <SelectItem key={m} value={m} className="text-xs">{tContactMethod(m)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <div className="relative flex-1">
                   <input
                     ref={logInputRef}
                     className="w-full text-sm border border-gray-200 rounded px-2 py-1"
-                    placeholder="这次沟通的内容摘要… 输入 @ 提及成员"
+                    placeholder={t('detail.placeholders.logSummary')}
                     value={logSummary}
                     onChange={handleLogSummaryChange}
                     onKeyDown={(e) => {
@@ -687,17 +702,17 @@ export function InfluencerDetail({
                 {/* Log list */}
                 <div className="space-y-2">
                   {logs.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">暂无沟通记录</p>
+                    <p className="text-sm text-gray-400 text-center py-4">{t('detail.logs.empty')}</p>
                   )}
                   {logs.map((log) => (
                     <div key={log.id} className="flex gap-3 text-sm border-l-2 border-gray-200 pl-3 py-1">
                       <div className="shrink-0">
-                        <Badge variant="outline" className="text-xs">{log.method}</Badge>
+                        <Badge variant="outline" className="text-xs">{tContactMethod(log.method)}</Badge>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-gray-800">{renderWithMentions(log.summary)}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {formatDistanceToNow(new Date(log.contacted_at), { addSuffix: true, locale: zhCN })}
+                          {formatRelative(log.contacted_at, locale)}
                           {log.profile && ` · ${log.profile.display_name ?? log.profile.email}`}
                           {log.source === 'twitter_api' && <span className="ml-1 text-blue-400">Twitter</span>}
                         </p>
@@ -713,18 +728,18 @@ export function InfluencerDetail({
           <TabsContent value="attribution" className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">追踪链接</CardTitle>
+                <CardTitle className="text-sm">{t('detail.cards.trackingLink')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!inf.kol_slug ? (
                   <div className="flex flex-col items-start gap-3">
-                    <p className="text-sm text-gray-500">还没有生成追踪链接，点击生成一个专属 slug。</p>
-                    <Button size="sm" onClick={handleGenerateSlug}>生成追踪链接</Button>
+                    <p className="text-sm text-gray-500">{t('detail.attribution.noSlugYet')}</p>
+                    <Button size="sm" onClick={handleGenerateSlug}>{t('detail.attribution.generate')}</Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <label className="text-xs text-gray-500 font-medium">Slug</label>
+                      <label className="text-xs text-gray-500 font-medium">{t('detail.fields.slug')}</label>
                       <div className="flex items-center gap-2">
                         <code className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded px-2 py-1">
                           {inf.kol_slug}
@@ -733,7 +748,7 @@ export function InfluencerDetail({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs text-gray-500 font-medium">追踪链接（分享给受众）</label>
+                      <label className="text-xs text-gray-500 font-medium">{t('detail.fields.trackingShareLink')}</label>
                       <div className="flex items-center gap-2">
                         <Input
                           readOnly
@@ -747,11 +762,11 @@ export function InfluencerDetail({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-xs text-gray-500 font-medium">目标 URL（跳转目的地）</label>
+                      <label className="text-xs text-gray-500 font-medium">{t('detail.fields.trackingTargetUrl')}</label>
                       <EditableUrl
                         value={inf.tracking_url}
                         onSave={(v) => updateField('tracking_url', v)}
-                        placeholder="https://yoursite.com/register（空则用环境变量默认值）"
+                        placeholder={t('detail.placeholders.trackingTargetExample')}
                       />
                     </div>
                   </div>
@@ -763,7 +778,7 @@ export function InfluencerDetail({
               <div className="grid grid-cols-3 gap-4">
                 <Card>
                   <CardContent className="pt-4">
-                    <p className="text-xs text-gray-500 mb-1">点击数</p>
+                    <p className="text-xs text-gray-500 mb-1">{t('detail.attribution.clicks')}</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {attrLoading ? '…' : (attrStats?.clicks ?? 0).toLocaleString()}
                     </p>
@@ -771,7 +786,7 @@ export function InfluencerDetail({
                 </Card>
                 <Card>
                   <CardContent className="pt-4">
-                    <p className="text-xs text-gray-500 mb-1">转化数</p>
+                    <p className="text-xs text-gray-500 mb-1">{t('detail.attribution.conversions')}</p>
                     <p className="text-2xl font-bold text-gray-900">
                       {attrLoading ? '…' : (attrStats?.conversions ?? 0).toLocaleString()}
                     </p>
@@ -779,9 +794,9 @@ export function InfluencerDetail({
                 </Card>
                 <Card>
                   <CardContent className="pt-4">
-                    <p className="text-xs text-gray-500 mb-1">转化率</p>
+                    <p className="text-xs text-gray-500 mb-1">{t('detail.attribution.conversionRate')}</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {attrLoading || !attrStats ? '…' : attrStats.clicks === 0 ? '—' : `${((attrStats.conversions / attrStats.clicks) * 100).toFixed(1)}%`}
+                      {attrLoading || !attrStats ? '…' : attrStats.clicks === 0 ? t('common.dash') : `${((attrStats.conversions / attrStats.clicks) * 100).toFixed(1)}%`}
                     </p>
                   </CardContent>
                 </Card>
@@ -792,11 +807,11 @@ export function InfluencerDetail({
             {inf.kol_slug && (
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">近 30 天点击趋势</CardTitle>
+                  <CardTitle className="text-sm">{t('detail.cards.clickTrend')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {attrLoading ? (
-                    <p className="text-sm text-gray-400 py-4 text-center">加载中…</p>
+                    <p className="text-sm text-gray-400 py-4 text-center">{t('common.loading')}</p>
                   ) : (
                     <AttributionChart clickEvents={clickEvents} />
                   )}
@@ -807,15 +822,13 @@ export function InfluencerDetail({
             {inf.kol_slug && (
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">嵌入代码（放在落地页 &lt;head&gt; 里）</CardTitle>
+                  <CardTitle className="text-sm">{t('detail.cards.embed')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <pre className="text-xs bg-gray-50 border border-gray-200 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all">
 {`<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/api/embed.js"></script>`}
                   </pre>
-                  <p className="text-xs text-gray-500">
-                    用户注册时调用 <code className="bg-gray-100 px-1 rounded">window.kolTrack(&apos;register&apos;)</code> 上报转化。
-                  </p>
+                  <p className="text-xs text-gray-500">{t('detail.attribution.embedHint')}</p>
                 </CardContent>
               </Card>
             )}
@@ -824,18 +837,18 @@ export function InfluencerDetail({
           {/* Activity log tab */}
           <TabsContent value="activity">
             <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-sm">操作日志</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">{t('detail.cards.activityLog')}</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {activityLogs.length === 0 && (
-                    <p className="text-sm text-gray-400 text-center py-4">暂无操作记录</p>
+                    <p className="text-sm text-gray-400 text-center py-4">{t('detail.logs.activityEmpty')}</p>
                   )}
                   {activityLogs.map((log) => (
                     <div key={log.id} className="flex gap-3 text-sm py-1.5 border-b border-gray-50 last:border-0">
                       <div className="flex-1 min-w-0">
                         <p className="text-gray-700">{log.description ?? log.action}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {format(new Date(log.created_at), 'MM-dd HH:mm', { locale: zhCN })}
+                          {formatShortDateTime(log.created_at, locale)}
                           {log.profile && ` · ${log.profile.display_name ?? log.profile.email}`}
                         </p>
                       </div>
@@ -868,6 +881,7 @@ function EditableText({
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
+  const { t } = useTranslation()
 
   // Sync external value changes (e.g. after rollback)
   useEffect(() => { if (!editing) setV(value ?? '') }, [value, editing])
@@ -897,17 +911,18 @@ function EditableText({
       className="group flex items-center gap-1 cursor-pointer min-h-[30px] px-2 py-1 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
       onClick={() => setEditing(true)}
     >
-      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v || (placeholder ?? '点击编辑')}</span>
+      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v || (placeholder ?? t('common.clickToEdit'))}</span>
       <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
     </div>
   )
 }
 
 function EditableNumber({
-  value, onSave, prefix,
-}: { value: number | null; onSave: (v: number | null) => void; prefix?: string }) {
+  value, onSave, prefix, placeholder,
+}: { value: number | null; onSave: (v: number | null) => void; prefix?: string; placeholder?: string }) {
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value?.toString() ?? '')
+  const { t } = useTranslation()
 
   useEffect(() => { if (!editing) setV(value?.toString() ?? '') }, [value, editing])
 
@@ -939,7 +954,7 @@ function EditableNumber({
       onClick={() => setEditing(true)}
     >
       {prefix && <span className="text-sm text-gray-400">{prefix}</span>}
-      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v ? Number(v).toLocaleString() : '点击编辑'}</span>
+      <span className={`flex-1 text-sm ${v ? 'text-gray-900' : 'text-gray-400'}`}>{v ? Number(v).toLocaleString() : (placeholder ?? t('common.clickToEdit'))}</span>
       <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
     </div>
   )
@@ -950,6 +965,7 @@ function EditableUrl({
 }: { value: string | null; onSave: (v: string | null) => void; placeholder?: string }) {
   const [editing, setEditing] = useState(false)
   const [v, setV] = useState(value ?? '')
+  const { t } = useTranslation()
 
   useEffect(() => { if (!editing) setV(value ?? '') }, [value, editing])
 
@@ -988,7 +1004,7 @@ function EditableUrl({
       {v ? (
         <a href={v} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex-1 text-sm text-blue-600 hover:underline truncate">{v}</a>
       ) : (
-        <span className="flex-1 text-sm text-gray-400">{placeholder ?? '点击添加链接'}</span>
+        <span className="flex-1 text-sm text-gray-400">{placeholder ?? t('common.clickToAddLink')}</span>
       )}
       <svg className="h-3 w-3 text-gray-300 group-hover:text-gray-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" /></svg>
     </div>

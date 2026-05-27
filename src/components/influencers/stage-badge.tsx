@@ -1,6 +1,9 @@
+'use client'
+
 import { Badge } from '@/components/ui/badge'
 import type { InfluencerStage, KanbanColumnId } from '@/types/database'
 import { KANBAN_COLUMNS } from '@/types/database'
+import { useTranslation } from '@/lib/i18n/provider'
 import { cn } from '@/lib/utils'
 
 const COLUMN_COLORS: Record<KanbanColumnId, string> = {
@@ -24,13 +27,14 @@ interface StageBadgeProps {
 }
 
 export function StageBadge({ stage, className }: StageBadgeProps) {
+  const { tStage } = useTranslation()
   const colId = getColumnForStage(stage)
   return (
     <Badge
       variant="outline"
       className={cn('text-xs', COLUMN_COLORS[colId], className)}
     >
-      {stage}
+      {tStage(stage)}
     </Badge>
   )
 }
