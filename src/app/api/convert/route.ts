@@ -16,9 +16,13 @@ import { NextRequest, NextResponse } from 'next/server'
  * Why upsert + ON CONFLICT (not select-then-insert):
  *   - Two near-simultaneous requests with the same
  *     (kol_slug, session_id, event_type) would both pass a SELECT check.
- *   - Migration `20260527_conversion_events_dedupe_index.sql` adds a partial
- *     unique index for `session_id IS NOT NULL`. The upsert with
- *     `ignoreDuplicates: true` returns no row on conflict, which we read as
+ *   - Migration `20260527_conversion_events_dedupe_index.sql` adds a unique
+ *     index on those three columns. The index is non-partial because
+ *     PostgREST/Supabase upsert only emits the column list as the conflict
+ *     target — it can't express a partial-index predicate, so a partial
+ *     index would fail to match. NULL session_ids stay un-deduped because
+ *     Postgres treats NULLs as distinct in unique indexes by default.
+ *   - `ignoreDuplicates: true` returns no row on conflict, which we read as
  *     "deduped" without a second round-trip.
  */
 function getServiceClient() {

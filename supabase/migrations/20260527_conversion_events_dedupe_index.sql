@@ -8,10 +8,19 @@
 --      same (kol_slug, session_id, event_type) would both pass the SELECT and
 --      both INSERT.
 --
--- This partial unique index closes both: the route now upserts with
--- ON CONFLICT DO NOTHING. NULL session_ids are excluded from the index so
--- anonymous (no-session) events still record (NULLs are not equal in postgres
--- and would otherwise never collide anyway).
+-- This non-partial unique index closes both: the route now upserts with
+-- ON CONFLICT (kol_slug, session_id, event_type) DO NOTHING.
+--
+-- A previous draft used a partial index (WHERE session_id IS NOT NULL), but
+-- PostgREST/Supabase `upsert(..., { onConflict: "..." })` only emits the
+-- column list — it cannot express a partial-index predicate, so Postgres
+-- can't match a partial index as the conflict target and the upsert fails at
+-- runtime with "no unique or exclusion constraint matching the ON CONFLICT
+-- specification".
+--
+-- A non-partial index gives the same dedupe behavior because Postgres treats
+-- NULLs as distinct in unique indexes by default (NULLS DISTINCT) — multiple
+-- rows where session_id IS NULL are still allowed, so anonymous (no-session)
+-- events stay un-deduped exactly as before.
 CREATE UNIQUE INDEX IF NOT EXISTS conversion_events_dedup_idx
-  ON conversion_events (kol_slug, session_id, event_type)
-  WHERE session_id IS NOT NULL;
+  ON conversion_events (kol_slug, session_id, event_type);
