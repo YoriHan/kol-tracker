@@ -324,15 +324,26 @@ export function InfluencerDetail({
     if (!logSummary.trim()) return
     const summary = logSummary.trim()
     const now = new Date().toISOString()
+    const prevLastContact = inf.last_contact_date
 
-    // Optimistic — show entry immediately
+    // Optimistic — show entry immediately.
+    //
+    // `contacted_at` mirrors the DB column (`timestamptz not null default now()`)
+    // and is read by `formatRelative(log.contacted_at, locale)` at render. Without
+    // it the cast to CommunicationLog masks the missing field at compile time, but
+    // at runtime `formatRelative(undefined, …)` calls `new Date(undefined)` →
+    // Invalid Date → date-fns throws RangeError, which crashes the log list until
+    // the insert returns. Set the same `now` timestamp for visual continuity.
     const tempId = `temp-${Date.now()}`
     const optimisticEntry = {
       id: tempId,
       influencer_id: inf.id,
+      user_id: null,
+      contacted_at: now,
       method: logMethod,
       summary,
       source: 'manual',
+      twitter_dm_id: null,
       created_at: now,
       profile: null,
     } as CommunicationLog
@@ -354,8 +365,10 @@ export function InfluencerDetail({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(supabase as any).from('influencers').update({ last_contact_date: now }).eq('id', inf.id)
     } else {
-      // Rollback
+      // Rollback — also restore `last_contact_date` so the influencer header
+      // doesn't keep showing the bumped timestamp after a failed insert.
       setLogs((prev) => prev.filter((l) => l.id !== tempId))
+      setInf((p) => ({ ...p, last_contact_date: prevLastContact }))
       setLogSummary(summary)
     }
     setAddingLog(false)
