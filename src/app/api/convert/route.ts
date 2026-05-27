@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (session_id) {
-    // Race-free path: rely on the partial unique index for dedupe.
+    // Race-free path: rely on the unique index for dedupe.
     const { data: inserted, error } = await supabase
       .from('conversion_events')
       .upsert(
