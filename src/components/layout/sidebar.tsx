@@ -11,6 +11,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/provider'
+import { LanguageSwitcher } from '@/components/layout/language-switcher'
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -30,8 +31,9 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 border-r bg-white h-screen flex flex-col">
-      <div className="px-4 py-5 border-b">
+      <div className="px-4 py-5 border-b flex items-center justify-between gap-2">
         <span className="font-semibold text-gray-900">{t('app.name')}</span>
+        <LanguageSwitcher />
       </div>
 
       <nav className="flex-1 px-2 py-3 space-y-1">

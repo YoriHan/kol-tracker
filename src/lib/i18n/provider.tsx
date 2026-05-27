@@ -13,6 +13,14 @@ import type { InfluencerStage, DealType, ContactMethod, PaymentStatus, KanbanCol
 
 const DICTIONARIES: Record<Locale, Dictionary> = { zh, en }
 
+/** Sync `<html lang>` so screen readers and browser features (translate
+ *  prompt, hyphenation, font fallback) follow the active locale. Safe to
+ *  call from any client effect; no-op on the server. */
+function applyHtmlLang(loc: Locale) {
+  if (typeof document === 'undefined') return
+  document.documentElement.setAttribute('lang', loc === 'zh' ? 'zh-CN' : 'en')
+}
+
 interface I18nContextValue {
   locale: Locale
   setLocale: (l: Locale) => void
@@ -47,6 +55,7 @@ export function LanguageProvider({ children, initialLocale }: LanguageProviderPr
         // Post-hydration sync from localStorage; intentional (see comment above).
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setLocaleState(saved)
+        applyHtmlLang(saved)
       }
     } catch {
       // localStorage may be unavailable (privacy mode); silently fall back.
@@ -62,10 +71,7 @@ export function LanguageProvider({ children, initialLocale }: LanguageProviderPr
       } catch {
         // ignore
       }
-      // Update the <html lang> attribute so screen readers / browser features
-      // pick up the new language without a page reload.
-      const htmlEl = document.documentElement
-      htmlEl.setAttribute('lang', next === 'zh' ? 'zh-CN' : 'en')
+      applyHtmlLang(next)
     }
   }, [])
 
