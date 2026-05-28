@@ -103,6 +103,11 @@ export const en: Dictionary = {
       viewDetail: 'View details',
       changeStage: 'Change stage',
     },
+    errors: {
+      stageUpdateFailed: 'Failed to update stage; change reverted.',
+      bulkStageUpdateFailed: 'Failed to update stage for {n} influencer(s); changes reverted.',
+      bulkAssignFailed: 'Failed to assign owner for {n} influencer(s); changes reverted.',
+    },
     csvHeaders: {
       twitter_handle: 'Twitter Handle',
       display_name: 'Display Name',

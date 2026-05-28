@@ -93,6 +93,11 @@ export interface Dictionary {
       viewDetail: string
       changeStage: string
     }
+    errors: {
+      stageUpdateFailed: string
+      bulkStageUpdateFailed: string
+      bulkAssignFailed: string
+    }
     csvHeaders: {
       twitter_handle: string
       display_name: string
