@@ -18,6 +18,24 @@ export type DealType = '推文' | '视频' | 'Story' | '直播' | '其他'
 export type ContactMethod = 'DM' | '邮件' | '电话' | '其他'
 export type PaymentStatus = '未开票' | '已开票' | '已付款'
 
+// Extraction pipeline state. See migration
+// 20260528_communication_extraction_schema.sql for the contract.
+export type ExtractionStatus = 'pending' | 'ready' | 'applied' | 'discarded'
+
+// Informal contract for `communication_logs.extracted`. Every key is
+// optional — the LLM may not surface a value, and the UI tolerates
+// missing keys. `current_stage` is constrained to the existing
+// enum so we never write a parallel stage taxonomy.
+export interface ExtractedFields {
+  current_stage?: InfluencerStage
+  quote_per_post?: number
+  contract_value?: number
+  next_followup_date?: string         // YYYY-MM-DD
+  next_followup_note?: string
+  risk_flags?: Record<string, unknown>
+  summary_short?: string
+}
+
 // Kanban column groupings
 export const KANBAN_COLUMNS = [
   {
@@ -79,6 +97,10 @@ export interface Influencer {
   stage_entered_at: string
   last_contact_date: string | null
   next_followup_date: string | null
+  next_followup_note: string | null
+  // Free-form per-influencer flags populated by the extraction
+  // pipeline; UI reads known keys only. Default in DB is `{}`.
+  risk_flags: Record<string, unknown>
   deal_type: DealType | null
   quote_per_post: number | null
   contract_value: number | null
@@ -117,6 +139,10 @@ export interface CommunicationLog {
   summary: string
   source: 'manual' | 'twitter_api'
   twitter_dm_id: string | null
+  // Extraction layer — null until the worker has produced output.
+  extracted: ExtractedFields | null
+  extraction_status: ExtractionStatus
+  extraction_model: string | null
   created_at: string
   profile?: Profile | null
 }
@@ -183,6 +209,7 @@ export interface Database {
       deal_type: DealType
       contact_method: ContactMethod
       payment_status: PaymentStatus
+      extraction_status: ExtractionStatus
     }
   }
 }
