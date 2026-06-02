@@ -1,0 +1,22 @@
+-- ============================================================
+-- Migration: add 'processing' value to extraction_status enum
+-- ============================================================
+-- Trace's PR #7 P2 finding: the prior idempotency guard
+-- (read-then-call-then-write) was not race-safe. Two simultaneous
+-- POSTs to /api/extract for the same pending log both saw 'pending',
+-- both called Anthropic, both wrote 'ready' — double billing.
+--
+-- Fix: claim the row atomically before the model call, by flipping
+-- 'pending' → 'processing' in a single UPDATE ... WHERE id = $1
+-- AND extraction_status = 'pending' RETURNING ... — only the winner
+-- of the claim proceeds; the loser reads back 'processing' and
+-- short-circuits.
+--
+-- This migration adds the new enum value. The route logic change is
+-- in src/app/api/extract/route.ts on the same PR.
+-- ============================================================
+
+-- ALTER TYPE ... ADD VALUE IF NOT EXISTS is safe to run repeatedly,
+-- and is committed independently of any usage that follows in the
+-- same transaction (Postgres 12+).
+alter type extraction_status add value if not exists 'processing';

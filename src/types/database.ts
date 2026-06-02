@@ -18,9 +18,17 @@ export type DealType = '推文' | '视频' | 'Story' | '直播' | '其他'
 export type ContactMethod = 'DM' | '邮件' | '电话' | '其他'
 export type PaymentStatus = '未开票' | '已开票' | '已付款'
 
-// Extraction pipeline state. See migration
-// 20260528_communication_extraction_schema.sql for the contract.
-export type ExtractionStatus = 'pending' | 'ready' | 'applied' | 'discarded'
+// Extraction pipeline state. See migrations
+//   20260528_communication_extraction_schema.sql (initial enum)
+//   20260602_extraction_status_processing.sql   (added 'processing')
+// 'processing' is the claim sentinel — set atomically by /api/extract
+// before the model call so concurrent POSTs can't double-bill.
+export type ExtractionStatus =
+  | 'pending'
+  | 'processing'
+  | 'ready'
+  | 'applied'
+  | 'discarded'
 
 // Informal contract for `communication_logs.extracted`. Every key is
 // optional — the LLM may not surface a value, and the UI tolerates
