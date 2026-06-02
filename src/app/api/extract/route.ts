@@ -177,25 +177,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   }
 
-  // ----- 4. fetch the log + parent influencer (RLS-bound) --------------
-  const logRes = await supabase
+  // ----- 4. atomically claim the row -----------------------------------
+  // The previous version did a read-then-call-then-write: it SELECTed
+  // the log, checked status === 'pending' in app code, then called
+  // Anthropic, then wrote 'ready'. Two simultaneous POSTs for the same
+  // pending log id both passed that check, both billed Claude, and
+  // both wrote — last-writer-wins on output, double cost.
+  //
+  // Now: a single UPDATE flips 'pending' → 'processing' WHERE id = $1
+  // AND extraction_status = 'pending'. Postgres serializes the two
+  // writes; only one returns a row. The loser sees an empty result and
+  // re-reads the current status to short-circuit. Only the claim
+  // winner ever calls Anthropic.
+  const claimRes = await supabase
     .from('communication_logs')
-    .select('id, summary, extraction_status, influencer_id, contacted_at')
+    .update({ extraction_status: 'processing' })
     .eq('id', logId)
-    .single<LogForExtraction>()
-  if (logRes.error || !logRes.data) {
-    return NextResponse.json({ error: 'log not found' }, { status: 404 })
-  }
-  const log = logRes.data
+    .eq('extraction_status', 'pending')
+    .select('id, summary, influencer_id, contacted_at')
+    .maybeSingle<Omit<LogForExtraction, 'extraction_status'>>()
 
-  // Idempotency — if extraction already ran (or was discarded), return
-  // current state instead of re-billing.
-  if (log.extraction_status !== 'pending') {
+  if (claimRes.error) {
+    console.error('[/api/extract] claim update failed', claimRes.error)
+    return NextResponse.json({ error: 'claim failed' }, { status: 500 })
+  }
+
+  // Lost the race (or the log was never 'pending'). Read current
+  // status and return it — don't 404 just because someone else
+  // already claimed.
+  if (!claimRes.data) {
+    const peek = await supabase
+      .from('communication_logs')
+      .select('id, extraction_status')
+      .eq('id', logId)
+      .maybeSingle<{ id: string; extraction_status: LogForExtraction['extraction_status'] }>()
+    if (peek.error || !peek.data) {
+      return NextResponse.json({ error: 'log not found' }, { status: 404 })
+    }
     return NextResponse.json(
-      { status: log.extraction_status, log_id: log.id },
+      { status: peek.data.extraction_status, log_id: peek.data.id },
       { status: 200 },
     )
   }
+
+  const log = claimRes.data
+  // From here on, we own the row in 'processing'. Any error path MUST
+  // either revert to 'pending' (so the next call can retry) or move
+  // it to a terminal state. A crash mid-call leaves the row stuck on
+  // 'processing'; that's a known limitation we accept for MVP — a
+  // recovery sweep can be added later if it surfaces in practice.
 
   const infRes = await supabase
     .from('influencers')
@@ -207,6 +237,13 @@ export async function POST(req: NextRequest) {
     .eq('id', log.influencer_id)
     .single<InfluencerForExtraction>()
   if (infRes.error || !infRes.data) {
+    // Revert claim — influencer disappeared between insert and
+    // extraction (cascading delete?). Don't strand the log.
+    await supabase
+      .from('communication_logs')
+      .update({ extraction_status: 'pending' })
+      .eq('id', logId)
+      .eq('extraction_status', 'processing')
     return NextResponse.json({ error: 'influencer not found' }, { status: 404 })
   }
   const influencer = infRes.data
@@ -271,6 +308,15 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // Surface a generic error; full detail goes to server logs only.
     console.error('[/api/extract] Anthropic call failed', e)
+    // Revert claim so a retry can pick this log back up. Guard the
+    // update with extraction_status='processing' so we don't clobber
+    // a parallel terminal write (defensive — shouldn't happen given
+    // the atomic claim, but cheap insurance).
+    await supabase
+      .from('communication_logs')
+      .update({ extraction_status: 'pending' })
+      .eq('id', logId)
+      .eq('extraction_status', 'processing')
     return NextResponse.json({ error: 'extraction failed' }, { status: 502 })
   }
 
@@ -286,6 +332,14 @@ export async function POST(req: NextRequest) {
 
   if (writeErr) {
     console.error('[/api/extract] DB write failed', writeErr)
+    // Best-effort revert. If this also fails the row is stuck on
+    // 'processing'; same MVP limitation noted at the top of the
+    // claim block.
+    await supabase
+      .from('communication_logs')
+      .update({ extraction_status: 'pending' })
+      .eq('id', logId)
+      .eq('extraction_status', 'processing')
     return NextResponse.json({ error: 'persist failed' }, { status: 500 })
   }
 
