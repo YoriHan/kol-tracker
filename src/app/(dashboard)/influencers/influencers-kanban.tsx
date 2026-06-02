@@ -43,6 +43,20 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
     if (!draggingId) return
     const draggedId = draggingId
     const newStage = getDefaultStage(colId)
+
+    // Capture the prior stage BEFORE the optimistic update so we can
+    // restore it if the DB write fails. The previous version's rollback
+    // was `onUpdate((prev) => [...prev])`, which is a no-op — same items,
+    // new array reference — so a failed write left the card stuck in the
+    // wrong column with no error surfaced.
+    const prevStage = influencers.find((i) => i.id === draggedId)?.current_stage
+    if (prevStage === undefined) {
+      // Card not in current view (state desync); bail out without optimistic move.
+      setDraggingId(null)
+      setDragOverCol(null)
+      return
+    }
+
     // Optimistic update — card moves instantly
     onUpdate((prev) =>
       prev.map((i) => (i.id === draggedId ? { ...i, current_stage: newStage } : i))
@@ -55,8 +69,13 @@ export function InfluencersKanban({ influencers, profiles, onUpdate }: Influence
       .update({ current_stage: newStage })
       .eq('id', draggedId)
     if (error) {
-      // Rollback on failure
-      onUpdate((prev) => [...prev])
+      // Rollback: restore the prior stage on the affected row.
+      onUpdate((prev) =>
+        prev.map((i) => (i.id === draggedId ? { ...i, current_stage: prevStage } : i))
+      )
+      if (typeof window !== 'undefined') {
+        window.alert(t('influencers.errors.stageUpdateFailed'))
+      }
     }
   }
 

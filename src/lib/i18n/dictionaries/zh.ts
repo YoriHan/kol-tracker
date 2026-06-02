@@ -102,6 +102,11 @@ export const zh: Dictionary = {
       viewDetail: '查看详情',
       changeStage: '更换阶段',
     },
+    errors: {
+      stageUpdateFailed: '更新阶段失败，已撤销修改',
+      bulkStageUpdateFailed: '批量更新阶段失败（{n} 个），已撤销修改',
+      bulkAssignFailed: '批量分配负责人失败（{n} 个），已撤销修改',
+    },
     csvHeaders: {
       twitter_handle: 'Twitter账号',
       display_name: '显示名称',

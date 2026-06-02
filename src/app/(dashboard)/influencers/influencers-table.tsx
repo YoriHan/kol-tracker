@@ -55,29 +55,81 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
     })
   }
 
+  // The previous versions of these handlers either swallowed write errors
+  // entirely (batch ops) or "rolled back" with `onUpdate((prev) => [...prev])`,
+  // which is a no-op — same items, new array reference. A failed Supabase
+  // write therefore left the rows visually mutated and the user with no
+  // signal that anything broke. Each handler now captures prior values
+  // BEFORE the optimistic update and restores them on error.
+
   async function batchAssign(userId: string) {
     if (selected.size === 0) return
     const ids = Array.from(selected)
-    onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, assigned_to: userId || null } : i))
+    const newAssignee = userId || null
+
+    // Snapshot prior assignees keyed by id for rollback.
+    const prevAssignees = new Map<string, string | null>()
+    for (const inf of influencers) {
+      if (selected.has(inf.id)) prevAssignees.set(inf.id, inf.assigned_to)
+    }
+
+    onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, assigned_to: newAssignee } : i))
     setSelected(new Set())
     setBatchAssigning(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('influencers').update({ assigned_to: userId || null }).in('id', ids)
+    const { error } = await (supabase as any)
+      .from('influencers')
+      .update({ assigned_to: newAssignee })
+      .in('id', ids)
     setBatchAssigning(false)
+    if (error) {
+      onUpdate((prev) =>
+        prev.map((i) =>
+          prevAssignees.has(i.id) ? { ...i, assigned_to: prevAssignees.get(i.id) ?? null } : i
+        )
+      )
+      if (typeof window !== 'undefined') {
+        window.alert(t('influencers.errors.bulkAssignFailed', { n: ids.length }))
+      }
+    }
   }
 
   async function batchChangeStage(stage: InfluencerStage) {
     if (selected.size === 0) return
     const ids = Array.from(selected)
+
+    // Snapshot prior stages keyed by id for rollback.
+    const prevStages = new Map<string, InfluencerStage>()
+    for (const inf of influencers) {
+      if (selected.has(inf.id)) prevStages.set(inf.id, inf.current_stage)
+    }
+
     onUpdate((prev) => prev.map((i) => selected.has(i.id) ? { ...i, current_stage: stage } : i))
     setSelected(new Set())
     setBatchStageing(true)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('influencers').update({ current_stage: stage }).in('id', ids)
+    const { error } = await (supabase as any)
+      .from('influencers')
+      .update({ current_stage: stage })
+      .in('id', ids)
     setBatchStageing(false)
+    if (error) {
+      onUpdate((prev) =>
+        prev.map((i) => {
+          const prevStage = prevStages.get(i.id)
+          return prevStage !== undefined ? { ...i, current_stage: prevStage } : i
+        })
+      )
+      if (typeof window !== 'undefined') {
+        window.alert(t('influencers.errors.bulkStageUpdateFailed', { n: ids.length }))
+      }
+    }
   }
 
   async function updateStage(id: string, stage: InfluencerStage) {
+    const prevStage = influencers.find((i) => i.id === id)?.current_stage
+    if (prevStage === undefined) return // row not in view; treat as desync, no-op.
+
     onUpdate((prev) =>
       prev.map((i) => (i.id === id ? { ...i, current_stage: stage } : i))
     )
@@ -87,7 +139,12 @@ export function InfluencersTable({ influencers, profiles, onUpdate }: Influencer
       .update({ current_stage: stage })
       .eq('id', id)
     if (error) {
-      onUpdate((prev) => [...prev])
+      onUpdate((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, current_stage: prevStage } : i))
+      )
+      if (typeof window !== 'undefined') {
+        window.alert(t('influencers.errors.stageUpdateFailed'))
+      }
     }
   }
 
